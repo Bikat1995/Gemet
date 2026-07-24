@@ -88,7 +88,7 @@ app.post('/payments/initialize', async (req, reply) => {
 });
 
 app.post('/webhooks/telegram', async (req, reply) => {
-  const update: any = JSON.parse((req.body as Buffer).toString());
+  const update: any = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : (typeof req.body === 'string' ? JSON.parse(req.body) : req.body);
   if (update.message) {
     const msg = update.message;
     const chatId = msg.chat.id;
