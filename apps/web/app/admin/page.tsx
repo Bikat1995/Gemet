@@ -16,7 +16,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!auth) return;
     const fetchAll = async () => {
-      const api = process.env.NEXT_PUBLIC_API_URL;
+      const api = process.env.NEXT_PUBLIC_API_URL || 'https://gemet-api.onrender.com';
       const [sRes, uRes, aRes] = await Promise.all([
         fetch(`${api}/admin/stats`),
         fetch(`${api}/admin/users`),

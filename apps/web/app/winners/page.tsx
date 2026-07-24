@@ -11,7 +11,7 @@ export default function Winners() {
   const [winners, setWinners] = useState<Winner[]>([]);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/winners`)
+    fetch(`${(process.env.NEXT_PUBLIC_API_URL || 'https://gemet-api.onrender.com')}/winners`)
       .then(r => r.ok ? r.json() : null)
       .then(x => x?.winners && setWinners(x.winners))
       .catch(() => {});

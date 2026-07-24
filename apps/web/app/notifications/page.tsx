@@ -14,7 +14,7 @@ export default function Notifications() {
 
   useEffect(() => {
     if (!tg.token) return;
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications`, {
+    fetch(`${(process.env.NEXT_PUBLIC_API_URL || 'https://gemet-api.onrender.com')}/notifications`, {
       headers: { authorization: `Bearer ${tg.token}` }
     })
       .then(r => r.ok ? r.json() : null)
@@ -22,7 +22,7 @@ export default function Notifications() {
         if (x?.notifications) {
           setNotifications(x.notifications);
           // Mark as read
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/read`, {
+          fetch(`${(process.env.NEXT_PUBLIC_API_URL || 'https://gemet-api.onrender.com')}/notifications/read`, {
             method: 'POST',
             headers: { authorization: `Bearer ${tg.token}` }
           }).catch(() => {});
