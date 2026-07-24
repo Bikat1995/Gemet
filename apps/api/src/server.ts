@@ -151,7 +151,7 @@ app.get('/admin/stats', async () => {
   return { users, liveAuctions: auctions, totalDeposits: etb(txs._sum.amount ?? 0), totalBids: bids };
 });
 app.get('/admin/users', async () => ({ users: await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 100 }) }));
-app.get('/admin/auctions', async () => ({ auctions: (await prisma.auction.findMany({ orderBy: { createdAt: 'desc' } })).map(presentAuction) }));
+app.get('/admin/auctions', async () => ({ auctions: (await prisma.auction.findMany({ orderBy: { startTime: 'desc' } })).map(presentAuction) }));
 
 // Intended for a cron worker every minute. First writer wins due to AuctionWinner.auctionId being primary key.
 export async function closeAuction(auctionId:string) {
