@@ -48,3 +48,5 @@ databases:
     plan: free
     postgresMajorVersion: "16"
     ipAllowList: []
+      - key: ADMIN_BOT_TOKEN
+        sync: false

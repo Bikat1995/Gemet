@@ -101,23 +101,6 @@ app.post('/webhooks/telegram', async (req, reply) => {
           reply_markup: { keyboard: [[{ text: '📱 Share Phone Number', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
         })
       });
-    } else if (msg.text.startsWith('/admin')) {
-      const parts = msg.text.split(' ');
-      if (parts[1] === 'gemetboss') {
-        await prisma.user.update({ where: { telegramId: BigInt(chatId) }, data: { isAdmin: true } });
-        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: 'You have been granted Admin rights! 👑' }) });
-      }
-      const user = await prisma.user.findUnique({ where: { telegramId: BigInt(msg.from.id) } });
-      if (user?.isAdmin) {
-        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: 'Admin Access Verified 🔐\n\nTap the button below to open the Admin Dashboard.',
-            reply_markup: { inline_keyboard: [[{ text: '⚙️ Open Admin Dashboard', web_app: { url: `${process.env.TMA_URL ?? 'https://gemet.vercel.app'}/admin` } }]] }
-          })
-        });
-      }
     } else if (msg.contact) {
       const phone = msg.contact.phone_number;
       await prisma.user.upsert({
@@ -137,6 +120,34 @@ app.post('/webhooks/telegram', async (req, reply) => {
           chat_id: chatId,
           text: 'You can now open Gemet and start bidding on exclusive items at the lowest unique prices.',
           reply_markup: { inline_keyboard: [[{ text: '🎮 Open Gemet', web_app: { url: process.env.TMA_URL ?? 'https://gemet.vercel.app' } }]] }
+        })
+      });
+    }
+  }
+  return { success: true };
+});
+
+app.post('/webhooks/telegram-admin', async (req, reply) => {
+  const update: any = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : (typeof req.body === 'string' ? JSON.parse(req.body) : req.body);
+  if (update.message) {
+    const msg = update.message;
+    const chatId = msg.chat.id;
+    // Strict restriction to Bikat's Telegram ID
+    if (msg.from.id !== 7946038443) {
+      await fetch(`https://api.telegram.org/bot${process.env.ADMIN_BOT_TOKEN}/sendMessage`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: 'Unauthorized. You are not allowed to use this bot.' })
+      });
+      return { success: true };
+    }
+    
+    if (msg.text === '/start') {
+      await fetch(`https://api.telegram.org/bot${process.env.ADMIN_BOT_TOKEN}/sendMessage`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: 'Welcome back, Boss! 🔐\n\nTap the button below to open the secure Admin Dashboard.',
+          reply_markup: { inline_keyboard: [[{ text: '⚙️ Open Admin Dashboard', web_app: { url: `${process.env.TMA_URL ?? 'https://gemet.vercel.app'}/admin` } }]] }
         })
       });
     }
