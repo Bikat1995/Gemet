@@ -87,6 +87,40 @@ app.post('/payments/initialize', async (req, reply) => {
   return { txRef, checkoutUrl:payload.data?.checkout_url };
 });
 
+app.post('/webhooks/telegram', async (req, reply) => {
+  const update: any = JSON.parse((req.body as Buffer).toString());
+  if (update.message) {
+    const msg = update.message;
+    const chatId = msg.chat.id;
+    if (msg.text === '/start') {
+      await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: 'Welcome to Gemet! To start bidding on exclusive items, please register by sharing your phone number.',
+          reply_markup: { keyboard: [[{ text: '📱 Share Phone Number', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
+        })
+      });
+    } else if (msg.contact) {
+      const phone = msg.contact.phone_number;
+      await prisma.user.upsert({
+        where: { telegramId: BigInt(msg.from.id) },
+        update: { phoneNumber: phone, username: msg.from.username },
+        create: { telegramId: BigInt(msg.from.id), username: msg.from.username, phoneNumber: phone }
+      });
+      await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: 'Registration complete! You can now open Gemet and start bidding.',
+          reply_markup: { inline_keyboard: [[{ text: 'Open Gemet', web_app: { url: process.env.TMA_URL } }]] }
+        })
+      });
+    }
+  }
+  return { ok: true };
+});
+
 app.post('/webhooks/chapa', async (req, reply) => {
   const raw = (req.body as Buffer).toString();
   if (!validChapaSignature(raw, req.headers['x-chapa-signature'] as string)) return reply.code(401).send({error:'Invalid signature'});
@@ -108,6 +142,16 @@ app.get('/events/:auctionId', { websocket:true }, (socket, req) => {
   redisSub.subscribe(channel); redisSub.on('message', handler);
   socket.on('close', () => { redisSub.off('message', handler); redisSub.unsubscribe(channel); });
 });
+
+app.get('/admin/stats', async () => {
+  const users = await prisma.user.count();
+  const auctions = await prisma.auction.count({ where: { status: AuctionStatus.active } });
+  const txs = await prisma.walletTransaction.aggregate({ _sum: { amount: true }, where: { type: TransactionType.deposit, status: TransactionStatus.success } });
+  const bids = await prisma.bid.count();
+  return { users, liveAuctions: auctions, totalDeposits: etb(txs._sum.amount ?? 0), totalBids: bids };
+});
+app.get('/admin/users', async () => ({ users: await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 100 }) }));
+app.get('/admin/auctions', async () => ({ auctions: (await prisma.auction.findMany({ orderBy: { createdAt: 'desc' } })).map(presentAuction) }));
 
 // Intended for a cron worker every minute. First writer wins due to AuctionWinner.auctionId being primary key.
 export async function closeAuction(auctionId:string) {
