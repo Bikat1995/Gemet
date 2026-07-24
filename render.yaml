@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: npm ci && npm run db:generate && npm run build -w @gemet/api
-    startCommand: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && npm run start -w @gemet/api
+    startCommand: npx prisma migrate deploy && npm run start -w @gemet/api
     healthCheckPath: /health
     autoDeploy: true
     envVars:
@@ -16,7 +16,8 @@ services:
           name: gemet-postgres
           property: connectionString
       - key: REDIS_URL
-        fromDatabase:
+        fromService:
+          type: redis
           name: gemet-redis
           property: connectionString
       - key: JWT_SECRET
@@ -33,14 +34,17 @@ services:
         sync: false
       - key: TMA_URL
         sync: false
+
+  - type: redis
+    name: gemet-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
 databases:
   - name: gemet-postgres
     databaseName: gemet
     user: gemet
     plan: free
     postgresMajorVersion: "16"
-    ipAllowList: []
-  - name: gemet-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
     ipAllowList: []
