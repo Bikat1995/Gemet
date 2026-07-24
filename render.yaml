@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: npm ci && npm run db:generate && npm run build -w @gemet/api
-    startCommand: npx prisma migrate deploy && npm run start -w @gemet/api
+    startCommand: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && npm run start -w @gemet/api
     healthCheckPath: /health
     autoDeploy: true
     envVars:
@@ -35,8 +35,8 @@ services:
       - key: TMA_URL
         sync: false
 
-  - type: redis
-    name: gemet-redis
+redis:
+  - name: gemet-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []
