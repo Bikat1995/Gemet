@@ -97,10 +97,22 @@ app.post('/webhooks/telegram', async (req, reply) => {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: 'Welcome to Gemet! To start bidding on exclusive items, please register by sharing your phone number.',
+          text: 'Welcome to Gemet! 🏆\n\nGemet is the premier unique-bid auction platform where you can win exclusive items (phones, gadgets, machines, and more) for a fraction of their price!\n\nTo start bidding, please register by sharing your phone number below.',
           reply_markup: { keyboard: [[{ text: '📱 Share Phone Number', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
         })
       });
+    } else if (msg.text === '/admin') {
+      const user = await prisma.user.findUnique({ where: { telegramId: BigInt(msg.from.id) } });
+      if (user?.isAdmin) {
+        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: 'Admin Access Verified 🔐\n\nTap the button below to open the Admin Dashboard.',
+            reply_markup: { inline_keyboard: [[{ text: '⚙️ Open Admin Dashboard', web_app: { url: `${process.env.TMA_URL ?? 'https://gemet.vercel.app'}/admin` } }]] }
+          })
+        });
+      }
     } else if (msg.contact) {
       const phone = msg.contact.phone_number;
       await prisma.user.upsert({
@@ -108,17 +120,23 @@ app.post('/webhooks/telegram', async (req, reply) => {
         update: { phoneNumber: phone, username: msg.from.username },
         create: { telegramId: BigInt(msg.from.id), username: msg.from.username, phoneNumber: phone }
       });
+      // Remove keyboard first
+      await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: 'Registration complete! 🎉', reply_markup: { remove_keyboard: true } })
+      });
+      // Send inline button
       await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: 'Registration complete! You can now open Gemet and start bidding.',
-          reply_markup: { inline_keyboard: [[{ text: 'Open Gemet', web_app: { url: process.env.TMA_URL } }]] }
+          text: 'You can now open Gemet and start bidding on exclusive items at the lowest unique prices.',
+          reply_markup: { inline_keyboard: [[{ text: '🎮 Open Gemet', web_app: { url: process.env.TMA_URL ?? 'https://gemet.vercel.app' } }]] }
         })
       });
     }
   }
-  return { ok: true };
+  return { success: true };
 });
 
 app.post('/webhooks/chapa', async (req, reply) => {
