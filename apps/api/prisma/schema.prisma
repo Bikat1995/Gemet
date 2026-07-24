@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuctionStatus {
+  active
+  ended
+  scheduled
+  cancelled
+}
+
+enum BidStatus {
+  created
+  duplicated
+  unique
+  invalid
+}
+
+enum TransactionType {
+  deposit
+  bid_fee
+}
+
+enum TransactionStatus {
+  pending
+  success
+  failed
+}
+
+model User {
+  id String @id @default(cuid())
+  telegramId BigInt @unique @map("telegram_id")
+  username String?
+  walletBalance Int @default(0) @map("wallet_balance") // cents
+  createdAt DateTime @default(now())
+  bids Bid[]
+  transactions WalletTransaction[]
+  wins AuctionWinner[]
+}
+model Auction {
+  id String @id @default(cuid())
+  title String
+  description String
+  imageUrl String @map("image_url")
+  entryFee Int @map("entry_fee") // cents
+  startTime DateTime @map("start_time")
+  endTime DateTime @map("end_time")
+  status AuctionStatus @default(scheduled)
+  bids Bid[]
+  winner AuctionWinner?
+}
+model Bid {
+  id String @id @default(cuid())
+  auctionId String @map("auction_id")
+  userId String @map("user_id")
+  amount Int // cents
+  status BidStatus @default(created)
+  calculatedAt DateTime? @map("calculated_at")
+  createdAt DateTime @default(now())
+  auction Auction @relation(fields:[auctionId],references:[id])
+  user User @relation(fields:[userId],references:[id])
+  @@index([auctionId,amount])
+}
+model WalletTransaction {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  amount Int // cents; positive deposits, negative bid fees
+  type TransactionType
+  txRef String? @unique @map("tx_ref")
+  status TransactionStatus @default(pending)
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id])
+  @@index([userId,createdAt])
+}
+model AuctionWinner {
+  auctionId String @id @map("auction_id")
+  userId String @map("user_id")
+  winningBidAmount Int @map("winning_bid_amount")
+  declaredAt DateTime @default(now())
+  auction Auction @relation(fields:[auctionId],references:[id])
+  user User @relation(fields:[userId],references:[id])
+}

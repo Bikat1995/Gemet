@@ -1,0 +1,7 @@
+{
+  "name": "gemet",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {"dev": "concurrently -n web,api -c magenta,cyan \"npm run dev -w @gemet/web\" \"npm run dev -w @gemet/api\"", "build": "npm run build -w @gemet/web && npm run build -w @gemet/api", "test": "npm run test -w @gemet/api", "db:generate": "npm run prisma:generate -w @gemet/api", "telegram:configure": "node --env-file=apps/api/.env apps/api/scripts/configure-telegram.mjs"},
+  "devDependencies": {"concurrently": "^9.1.2"}
+}
