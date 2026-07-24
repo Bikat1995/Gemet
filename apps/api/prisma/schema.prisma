@@ -41,6 +41,7 @@ model User {
   bids Bid[]
   transactions WalletTransaction[]
   wins AuctionWinner[]
+  notifications Notification[]
 }
 model Auction {
   id String @id @default(cuid())
@@ -50,6 +51,7 @@ model Auction {
   entryFee Int @map("entry_fee") // cents
   startTime DateTime @map("start_time")
   endTime DateTime @map("end_time")
+  category String @default("other")
   status AuctionStatus @default(scheduled)
   bids Bid[]
   winner AuctionWinner?
@@ -84,4 +86,14 @@ model AuctionWinner {
   declaredAt DateTime @default(now())
   auction Auction @relation(fields:[auctionId],references:[id])
   user User @relation(fields:[userId],references:[id])
+}
+model Notification {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  title String
+  message String
+  read Boolean @default(false)
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id])
+  @@index([userId,createdAt])
 }

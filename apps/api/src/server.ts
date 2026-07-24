@@ -27,8 +27,35 @@ app.post('/auth/telegram', async (req, reply) => {
 
 app.get('/health', async () => ({ ok: true, service: 'gemet-api' }));
 
-app.get('/auctions', async () => ({ auctions: (await prisma.auction.findMany({ where:{ status:AuctionStatus.active }, orderBy:{ endTime:'asc' } })).map(presentAuction) }));
+app.get('/auctions', async (req) => {
+  const cat = (req.query as any).category;
+  const where = { status: AuctionStatus.active, ...(cat && cat !== 'All' ? { category: cat } : {}) };
+  return { auctions: (await prisma.auction.findMany({ where, orderBy:{ endTime:'asc' } })).map(presentAuction) };
+});
 app.get('/wallet', async req => { const s = await session(req); const u = await prisma.user.findUniqueOrThrow({where:{id:s.userId}}); return { balance:etb(u.walletBalance) }; });
+app.get('/wallet/history', async req => {
+  const s = await session(req);
+  const txs = await prisma.walletTransaction.findMany({ where:{ userId: s.userId }, orderBy: { createdAt: 'desc' } });
+  return { transactions: txs.map(t => ({ id: t.id, amount: etb(Math.abs(t.amount)), isDeposit: t.amount > 0, status: t.status, date: t.createdAt })) };
+});
+app.get('/bids/history', async req => {
+  const s = await session(req);
+  const bids = await prisma.bid.findMany({ where:{ userId: s.userId }, include: { auction: true }, orderBy: { createdAt: 'desc' } });
+  return { bids: bids.map(b => ({ id: b.id, amount: etb(b.amount), status: b.status, date: b.createdAt, auction: { title: b.auction.title, status: b.auction.status, imageUrl: b.auction.imageUrl } })) };
+});
+app.get('/winners', async () => {
+  const winners = await prisma.auctionWinner.findMany({ include: { auction: true, user: true }, orderBy: { declaredAt: 'desc' } });
+  return { winners: winners.map(w => ({ id: w.auctionId, title: w.auction.title, image: w.auction.imageUrl, winner: w.user.username ?? 'Anonymous', amount: etb(w.winningBidAmount), date: w.declaredAt })) };
+});
+app.get('/notifications', async req => {
+  const s = await session(req);
+  return { notifications: await prisma.notification.findMany({ where: { userId: s.userId }, orderBy: { createdAt: 'desc' } }) };
+});
+app.post('/notifications/read', async req => {
+  const s = await session(req);
+  await prisma.notification.updateMany({ where: { userId: s.userId, read: false }, data: { read: true } });
+  return { success: true };
+});
 
 app.post('/bids', async (req, reply) => {
   const s = await session(req); const input = z.object({ auctionId:z.string(), amount:z.coerce.number().positive().max(1_000_000) }).parse(JSON.parse((req.body as Buffer).toString()));
@@ -70,6 +97,7 @@ app.post('/webhooks/chapa', async (req, reply) => {
     const payment = await tx.walletTransaction.findUnique({where:{txRef}}); if (!payment || payment.status === TransactionStatus.success) return;
     await tx.walletTransaction.update({where:{id:payment.id},data:{status:TransactionStatus.success}});
     await tx.user.update({where:{id:payment.userId},data:{walletBalance:{increment:payment.amount}}});
+    await tx.notification.create({data:{userId:payment.userId,title:'Deposit Successful',message:`Your deposit of ${etb(payment.amount)} ETB has been credited to your wallet.`}});
   }, { isolationLevel:'Serializable' });
   return { received:true };
 });
@@ -88,6 +116,7 @@ export async function closeAuction(auctionId:string) {
   if (winningAmount === null) return null;
   const bid = await prisma.bid.findFirstOrThrow({where:{auctionId,amount:winningAmount},orderBy:{createdAt:'asc'}});
   const winner = await prisma.auctionWinner.upsert({where:{auctionId},update:{},create:{auctionId,userId:bid.userId,winningBidAmount:winningAmount}});
+  await prisma.notification.create({data:{userId:bid.userId,title:'Auction Won!',message:`You won “${auction.title}” with ${etb(winningAmount)} ETB.`}});
   // Fire-and-forget is intentional: notification failure can never roll back a declared result.
   const user = await prisma.user.findUniqueOrThrow({where:{id:bid.userId}});
   if (process.env.BOT_TOKEN) fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:String(user.telegramId),text:`🏆 Congratulations! You won “${auction.title}” with the lowest unique bid of ${etb(winningAmount)} ETB.`})}).catch(err => app.log.error(err, 'winner notification failed'));
