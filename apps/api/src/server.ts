@@ -204,7 +204,7 @@ app.post('/admin/auctions', async (req, reply) => {
   const schema = z.object({
     title: z.string().min(3),
     description: z.string().min(5),
-    imageUrl: z.string().url(),
+    imageUrl: z.string().min(1),
     category: z.string().min(2),
     entryFee: z.coerce.number().positive(), // in ETB
     startTime: z.string().datetime(),

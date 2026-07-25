@@ -46,6 +46,20 @@ export default function AdminDashboard() {
     fetchAll();
   }, [auth]);
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image is too large (max 2MB)");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImageUrl(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -275,10 +289,13 @@ export default function AdminDashboard() {
                 <textarea required rows={3} value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="A brief description of the item" />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">Image URL</label>
-                  <input required type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="https://..." />
+                  <label className="block text-sm text-slate-400 mb-1">Item Image</label>
+                  <div className="flex items-center gap-4">
+                    {imageUrl && <img src={imageUrl} alt="Preview" className="h-12 w-12 object-cover rounded-lg border border-white/10" />}
+                    <input required={!imageUrl} type="file" accept="image/*" onChange={handleImageUpload} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-2 text-sm text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-cyan-500/20 file:text-cyan-400 hover:file:bg-cyan-500/30" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-1">Category</label>
