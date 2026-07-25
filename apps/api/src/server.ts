@@ -184,7 +184,21 @@ app.get('/admin/stats', async () => {
   const bids = await prisma.bid.count();
   return { users, liveAuctions: auctions, totalDeposits: etb(txs._sum.amount ?? 0), totalBids: bids };
 });
-app.get('/admin/users', async () => ({ users: await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 100 }) }));
+app.get('/admin/users', async () => {
+  const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+  return { users: users.map(u => ({ ...u, telegramId: String(u.telegramId) })) };
+});
+app.get('/admin/winners', async () => {
+  const winners = await prisma.auctionWinner.findMany({ include: { auction: true, user: true }, orderBy: { declaredAt: 'desc' } });
+  return { winners: winners.map(w => ({
+    auctionId: w.auctionId,
+    title: w.auction.title,
+    username: w.user.username || 'Anonymous',
+    phoneNumber: w.user.phoneNumber || 'Not provided',
+    winningBidAmount: etb(w.winningBidAmount),
+    date: w.declaredAt
+  })) };
+});
 app.get('/admin/auctions', async () => ({ auctions: (await prisma.auction.findMany({ orderBy: { startTime: 'desc' } })).map(presentAuction) }));
 app.post('/admin/auctions', async (req, reply) => {
   const schema = z.object({

@@ -5,6 +5,7 @@ import { Icon } from '../components/Icons';
 type Stats = { users: number; liveAuctions: number; totalDeposits: string; totalBids: number };
 type User = { id: string; username: string; phoneNumber: string; walletBalance: number; createdAt: string; };
 type Auction = { id: string; title: string; entryFee: string; status: string; };
+type Winner = { auctionId: string; title: string; username: string; phoneNumber: string; winningBidAmount: string; date: string; };
 
 export default function AdminDashboard() {
   const [pass, setPass] = useState('');
@@ -12,6 +13,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [auctions, setAuctions] = useState<Auction[]>([]);
+  const [winners, setWinners] = useState<Winner[]>([]);
   const [showModal, setShowModal] = useState(false);
   
   // New Auction Form State
@@ -27,14 +29,16 @@ export default function AdminDashboard() {
   const api = 'https://gemet-api.onrender.com';
 
   const fetchAll = async () => {
-    const [sRes, uRes, aRes] = await Promise.all([
+    const [sRes, uRes, aRes, wRes] = await Promise.all([
       fetch(`${api}/admin/stats`),
       fetch(`${api}/admin/users`),
-      fetch(`${api}/admin/auctions`)
+      fetch(`${api}/admin/auctions`),
+      fetch(`${api}/admin/winners`)
     ]);
     if(sRes.ok) setStats(await sRes.json());
     if(uRes.ok) setUsers((await uRes.json()).users);
     if(aRes.ok) setAuctions((await aRes.json()).auctions);
+    if(wRes.ok) setWinners((await wRes.json()).winners);
   };
 
   useEffect(() => {
@@ -67,6 +71,25 @@ export default function AdminDashboard() {
       alert('Error creating auction');
     }
     setSubmitting(false);
+  };
+
+  const exportCsv = (data: any[], filename: string) => {
+    if (!data.length) return alert("No data to export");
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(h => `"${String(row[h]).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (!auth) {
@@ -130,9 +153,14 @@ export default function AdminDashboard() {
             </div>
           </section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
             <section className="bg-[#141923] p-6 rounded-2xl border border-white/5 overflow-hidden">
-              <h3 className="text-lg font-bold mb-4">Recent Users</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold">Recent Users</h3>
+                <button onClick={() => exportCsv(users, 'users.csv')} className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                  <Icon name="download" size={14} /> Export CSV
+                </button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
@@ -158,7 +186,12 @@ export default function AdminDashboard() {
             </section>
 
             <section className="bg-[#141923] p-6 rounded-2xl border border-white/5 overflow-hidden">
-              <h3 className="text-lg font-bold mb-4">System Auctions</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold">System Auctions</h3>
+                <button onClick={() => exportCsv(auctions, 'auctions.csv')} className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                  <Icon name="download" size={14} /> Export CSV
+                </button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
@@ -185,6 +218,41 @@ export default function AdminDashboard() {
               </div>
             </section>
           </div>
+
+          <section className="bg-[#141923] p-6 rounded-2xl border border-white/5 overflow-hidden">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">Auction Winners</h3>
+              <button onClick={() => exportCsv(winners, 'winners.csv')} className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <Icon name="download" size={14} /> Export CSV
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
+                  <tr>
+                    <th className="px-4 py-3 rounded-tl-lg">Auction</th>
+                    <th className="px-4 py-3">Winner</th>
+                    <th className="px-4 py-3">Phone</th>
+                    <th className="px-4 py-3">Winning Bid</th>
+                    <th className="px-4 py-3 rounded-tr-lg">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {winners.length === 0 ? (
+                    <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No winners yet</td></tr>
+                  ) : winners.map(w => (
+                    <tr key={w.auctionId} className="border-b border-white/5">
+                      <td className="px-4 py-3 font-medium text-white">{w.title}</td>
+                      <td className="px-4 py-3 text-white">{w.username}</td>
+                      <td className="px-4 py-3 text-cyan-300">{w.phoneNumber}</td>
+                      <td className="px-4 py-3 text-emerald-400 font-mono">{w.winningBidAmount} ETB</td>
+                      <td className="px-4 py-3 text-slate-400">{new Date(w.date).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
       )}
 
