@@ -34,6 +34,8 @@ services:
         sync: false
       - key: TMA_URL
         sync: false
+      - key: ADMIN_BOT_TOKEN
+        sync: false
 
   - type: redis
     name: gemet-redis
@@ -48,5 +50,3 @@ databases:
     plan: free
     postgresMajorVersion: "16"
     ipAllowList: []
-      - key: ADMIN_BOT_TOKEN
-        sync: false
