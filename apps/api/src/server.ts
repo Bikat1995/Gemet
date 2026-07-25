@@ -186,6 +186,31 @@ app.get('/admin/stats', async () => {
 });
 app.get('/admin/users', async () => ({ users: await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 100 }) }));
 app.get('/admin/auctions', async () => ({ auctions: (await prisma.auction.findMany({ orderBy: { startTime: 'desc' } })).map(presentAuction) }));
+app.post('/admin/auctions', async (req, reply) => {
+  const schema = z.object({
+    title: z.string().min(3),
+    description: z.string().min(5),
+    imageUrl: z.string().url(),
+    category: z.string().min(2),
+    entryFee: z.coerce.number().positive(), // in ETB
+    startTime: z.string().datetime(),
+    endTime: z.string().datetime(),
+  });
+  const data = schema.parse(req.body);
+  const auction = await prisma.auction.create({
+    data: {
+      title: data.title,
+      description: data.description,
+      imageUrl: data.imageUrl,
+      category: data.category,
+      entryFee: cents(data.entryFee),
+      startTime: new Date(data.startTime),
+      endTime: new Date(data.endTime),
+      status: AuctionStatus.scheduled,
+    }
+  });
+  return { success: true, auction: presentAuction(auction) };
+});
 
 // Intended for a cron worker every minute. First writer wins due to AuctionWinner.auctionId being primary key.
 export async function closeAuction(auctionId:string) {

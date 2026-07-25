@@ -12,22 +12,62 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [auctions, setAuctions] = useState<Auction[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  
+  // New Auction Form State
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [category, setCategory] = useState('electronics');
+  const [entryFee, setEntryFee] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const api = 'https://gemet-api.onrender.com';
+
+  const fetchAll = async () => {
+    const [sRes, uRes, aRes] = await Promise.all([
+      fetch(`${api}/admin/stats`),
+      fetch(`${api}/admin/users`),
+      fetch(`${api}/admin/auctions`)
+    ]);
+    if(sRes.ok) setStats(await sRes.json());
+    if(uRes.ok) setUsers((await uRes.json()).users);
+    if(aRes.ok) setAuctions((await aRes.json()).auctions);
+  };
 
   useEffect(() => {
     if (!auth) return;
-    const fetchAll = async () => {
-      const api = 'https://gemet-api.onrender.com';
-      const [sRes, uRes, aRes] = await Promise.all([
-        fetch(`${api}/admin/stats`),
-        fetch(`${api}/admin/users`),
-        fetch(`${api}/admin/auctions`)
-      ]);
-      setStats(await sRes.json());
-      setUsers((await uRes.json()).users);
-      setAuctions((await aRes.json()).auctions);
-    };
     fetchAll();
   }, [auth]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${api}/admin/auctions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title, description, imageUrl, category, entryFee: Number(entryFee),
+          startTime: new Date(startTime).toISOString(),
+          endTime: new Date(endTime).toISOString()
+        })
+      });
+      if (res.ok) {
+        setShowModal(false);
+        fetchAll(); // Refresh the list
+        // Reset form
+        setTitle(''); setDescription(''); setImageUrl(''); setEntryFee(''); setStartTime(''); setEndTime('');
+      } else {
+        alert('Failed to create auction. Please check the inputs.');
+      }
+    } catch (err) {
+      alert('Error creating auction');
+    }
+    setSubmitting(false);
+  };
 
   if (!auth) {
     return (
@@ -53,12 +93,20 @@ export default function AdminDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0A0D14] text-white p-8">
-      <header className="mb-8 flex items-center gap-3">
-        <div className="h-10 w-10 bg-cyan-500 rounded-lg grid place-items-center text-slate-900">
-          <Icon name="sliders" size={20} />
+    <main className="min-h-screen bg-[#0A0D14] text-white p-8 relative">
+      <header className="mb-8 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 bg-cyan-500 rounded-lg grid place-items-center text-slate-900">
+            <Icon name="sliders" size={20} />
+          </div>
+          <h1 className="text-2xl font-bold">Gemet System Dashboard</h1>
         </div>
-        <h1 className="text-2xl font-bold">Gemet System Dashboard</h1>
+        <button 
+          onClick={() => setShowModal(true)}
+          className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 px-4 rounded-lg flex items-center gap-2"
+        >
+          <Icon name="plus" size={16} /> Create Auction
+        </button>
       </header>
 
       {!stats ? <p>Loading data...</p> : (
@@ -138,6 +186,65 @@ export default function AdminDashboard() {
             </section>
           </div>
         </>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#141923] border border-white/10 rounded-2xl p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold">Create New Auction</h2>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Title</label>
+                <input required type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="e.g. iPhone 15 Pro Max" />
+              </div>
+              
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Description</label>
+                <textarea required rows={3} value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="A brief description of the item" />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Image URL</label>
+                  <input required type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="https://..." />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Category</label>
+                  <select value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500">
+                    <option value="electronics">Electronics</option>
+                    <option value="vehicles">Vehicles</option>
+                    <option value="property">Property</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Entry Fee (ETB)</label>
+                <input required type="number" min="1" step="0.01" value={entryFee} onChange={e => setEntryFee(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="e.g. 30" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Start Time (Local)</label>
+                  <input required type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">End Time (Local)</label>
+                  <input required type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" />
+                </div>
+              </div>
+
+              <button disabled={submitting} type="submit" className="w-full mt-4 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-900 font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+                {submitting ? 'Creating...' : 'Create Auction'}
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </main>
   );
