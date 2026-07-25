@@ -22,7 +22,6 @@ export default function AdminDashboard() {
   const [imageUrl, setImageUrl] = useState('');
   const [category, setCategory] = useState('electronics');
   const [entryFee, setEntryFee] = useState('');
-  const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,7 +68,6 @@ export default function AdminDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title, description, imageUrl, category, entryFee: Number(entryFee),
-          startTime: new Date(startTime).toISOString(),
           endTime: new Date(endTime).toISOString()
         })
       });
@@ -77,7 +75,7 @@ export default function AdminDashboard() {
         setShowModal(false);
         fetchAll(); // Refresh the list
         // Reset form
-        setTitle(''); setDescription(''); setImageUrl(''); setEntryFee(''); setStartTime(''); setEndTime('');
+        setTitle(''); setDescription(''); setImageUrl(''); setEntryFee(''); setEndTime('');
       } else {
         const errorText = await res.text();
         console.error("Backend Error:", errorText);
@@ -316,11 +314,7 @@ export default function AdminDashboard() {
                 <input required type="number" min="1" step="0.01" value={entryFee} onChange={e => setEntryFee(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="e.g. 30" />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-400 mb-1">Start Time (Local)</label>
-                  <input required type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" />
-                </div>
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-sm text-slate-400 mb-1">End Time (Local)</label>
                   <input required type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" />

@@ -211,7 +211,6 @@ app.post('/admin/auctions', async (req, reply) => {
     imageUrl: z.string().min(1),
     category: z.string().min(2),
     entryFee: z.coerce.number().positive(), // in ETB
-    startTime: z.string().datetime(),
     endTime: z.string().datetime(),
   });
   let bodyData;
@@ -228,7 +227,7 @@ app.post('/admin/auctions', async (req, reply) => {
       imageUrl: data.imageUrl,
       category: data.category,
       entryFee: cents(data.entryFee),
-      startTime: new Date(data.startTime),
+      startTime: new Date(),
       endTime: new Date(data.endTime),
       status: AuctionStatus.active,
     }
