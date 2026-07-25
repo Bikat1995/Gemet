@@ -230,7 +230,7 @@ app.post('/admin/auctions', async (req, reply) => {
       entryFee: cents(data.entryFee),
       startTime: new Date(data.startTime),
       endTime: new Date(data.endTime),
-      status: AuctionStatus.scheduled,
+      status: AuctionStatus.active,
     }
   });
   return { success: true, auction: presentAuction(auction) };
