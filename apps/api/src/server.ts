@@ -20,7 +20,11 @@ function presentAuction(a: any) { return { ...a, entryFee: etb(a.entryFee), star
 
 app.post('/auth/telegram', async (req, reply) => {
   const body = z.object({ initData: z.string() }).parse(JSON.parse((req.body as Buffer).toString()));
-  const telegram = verifyTelegramInitData(body.initData); if (!telegram) return reply.code(401).send({ error: 'Invalid Telegram initData' });
+  let telegram = verifyTelegramInitData(body.initData, process.env.BOT_TOKEN!);
+  if (!telegram && process.env.ADMIN_BOT_TOKEN) {
+    telegram = verifyTelegramInitData(body.initData, process.env.ADMIN_BOT_TOKEN);
+  }
+  if (!telegram) return reply.code(401).send({ error: 'Invalid Telegram initData' });
   const user = await prisma.user.upsert({ where: { telegramId: BigInt(telegram.id) }, update: { username: telegram.username }, create: { telegramId: BigInt(telegram.id), username: telegram.username } });
   return { token: app.jwt.sign({ userId: user.id, telegramId: String(user.telegramId) }), user: { id:user.id, username:user.username, phoneNumber:user.phoneNumber, balance:etb(user.walletBalance) } };
 });
