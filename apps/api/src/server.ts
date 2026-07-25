@@ -8,7 +8,7 @@ import { AuctionStatus, BidStatus, TransactionStatus, TransactionType } from '@p
 import { prisma, redisSub, verifyTelegramInitData, validChapaSignature, cents, etb } from './lib.js';
 import { lowestUnique, registerBid } from './luba.js';
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, bodyLimit: 20971520 });
 await app.register(cors, { origin: true });
 await app.register(jwt, { secret: process.env.JWT_SECRET ?? 'development-only-change-me' });
 await app.register(websocket);
@@ -22,7 +22,7 @@ app.post('/auth/telegram', async (req, reply) => {
   const body = z.object({ initData: z.string() }).parse(JSON.parse((req.body as Buffer).toString()));
   const telegram = verifyTelegramInitData(body.initData); if (!telegram) return reply.code(401).send({ error: 'Invalid Telegram initData' });
   const user = await prisma.user.upsert({ where: { telegramId: BigInt(telegram.id) }, update: { username: telegram.username }, create: { telegramId: BigInt(telegram.id), username: telegram.username } });
-  return { token: app.jwt.sign({ userId: user.id, telegramId: String(user.telegramId) }), user: { id:user.id, username:user.username, balance:etb(user.walletBalance) } };
+  return { token: app.jwt.sign({ userId: user.id, telegramId: String(user.telegramId) }), user: { id:user.id, username:user.username, phoneNumber:user.phoneNumber, balance:etb(user.walletBalance) } };
 });
 
 app.get('/health', async () => ({ ok: true, service: 'gemet-api' }));
