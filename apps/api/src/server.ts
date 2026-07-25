@@ -9,7 +9,7 @@ import { prisma, redisSub, verifyTelegramInitData, validChapaSignature, cents, e
 import { lowestUnique, registerBid } from './luba.js';
 
 const app = Fastify({ logger: true, bodyLimit: 20971520 });
-await app.register(cors, { origin: true });
+await app.register(cors, { origin: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'] });
 await app.register(jwt, { secret: process.env.JWT_SECRET ?? 'development-only-change-me' });
 await app.register(websocket);
 app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
