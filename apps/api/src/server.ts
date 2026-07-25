@@ -210,7 +210,13 @@ app.post('/admin/auctions', async (req, reply) => {
     startTime: z.string().datetime(),
     endTime: z.string().datetime(),
   });
-  const data = schema.parse(req.body);
+  let bodyData;
+  try {
+    bodyData = JSON.parse((req.body as Buffer).toString());
+  } catch (err) {
+    return reply.code(400).send({ error: 'Invalid JSON' });
+  }
+  const data = schema.parse(bodyData);
   const auction = await prisma.auction.create({
     data: {
       title: data.title,

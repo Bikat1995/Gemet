@@ -79,10 +79,13 @@ export default function AdminDashboard() {
         // Reset form
         setTitle(''); setDescription(''); setImageUrl(''); setEntryFee(''); setStartTime(''); setEndTime('');
       } else {
-        alert('Failed to create auction. Please check the inputs.');
+        const errorText = await res.text();
+        console.error("Backend Error:", errorText);
+        alert(`Failed to create auction. Server response: ${errorText}`);
       }
     } catch (err) {
-      alert('Error creating auction');
+      console.error("Network Error:", err);
+      alert(`Error creating auction: ${(err as Error).message}`);
     }
     setSubmitting(false);
   };
