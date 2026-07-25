@@ -88,6 +88,17 @@ export default function AdminDashboard() {
     setSubmitting(false);
   };
 
+  const handleDeleteAuction = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this auction?')) return;
+    try {
+      const res = await fetch(`${api}/admin/auctions/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchAll();
+      else alert('Failed to delete auction');
+    } catch (err) {
+      alert(`Error: ${(err as Error).message}`);
+    }
+  };
+
   const exportCsv = (data: any[], filename: string) => {
     if (!data.length) return alert("No data to export");
     const headers = Object.keys(data[0]);
@@ -213,7 +224,8 @@ export default function AdminDashboard() {
                     <tr>
                       <th className="px-4 py-3 rounded-tl-lg">Title</th>
                       <th className="px-4 py-3">Entry Fee</th>
-                      <th className="px-4 py-3 rounded-tr-lg">Status</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 rounded-tr-lg">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -225,6 +237,9 @@ export default function AdminDashboard() {
                           <span className={`px-2 py-1 rounded text-xs font-bold ${a.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'}`}>
                             {a.status}
                           </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button onClick={() => handleDeleteAuction(a.id)} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-1.5 rounded-lg">Delete</button>
                         </td>
                       </tr>
                     ))}

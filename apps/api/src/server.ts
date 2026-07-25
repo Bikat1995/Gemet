@@ -235,6 +235,16 @@ app.post('/admin/auctions', async (req, reply) => {
   return { success: true, auction: presentAuction(auction) };
 });
 
+app.delete('/admin/auctions/:id', async (req, reply) => {
+  const { id } = req.params as { id: string };
+  try {
+    await prisma.auction.delete({ where: { id } });
+    return { success: true };
+  } catch (err) {
+    return reply.code(500).send({ error: 'Failed to delete auction' });
+  }
+});
+
 // Intended for a cron worker every minute. First writer wins due to AuctionWinner.auctionId being primary key.
 export async function closeAuction(auctionId:string) {
   const auction = await prisma.auction.findUniqueOrThrow({where:{id:auctionId}}); if (auction.endTime > new Date()) throw new Error('Auction has not ended');
