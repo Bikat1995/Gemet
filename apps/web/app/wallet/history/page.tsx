@@ -14,7 +14,7 @@ export default function WalletHistory() {
 
   useEffect(() => {
     if (!tg.token) return;
-    fetch(`${(process.env.NEXT_PUBLIC_API_URL || 'https://gemet-api.onrender.com')}/wallet/history`, {
+    fetch(`${'https://gemet-api.onrender.com'}/wallet/history`, {
       headers: { authorization: `Bearer ${tg.token}` }
     })
       .then(r => r.ok ? r.json() : null)
