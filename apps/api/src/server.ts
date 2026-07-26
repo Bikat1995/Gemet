@@ -123,6 +123,15 @@ app.post('/auctions/:id/pay', async (req, reply) => {
   }
 });
 
+app.get('/debug-db', async (req, reply) => {
+  try {
+    const bids = await prisma.$queryRaw`SELECT * FROM "Bid" LIMIT 1`;
+    return { ok: true, bids };
+  } catch (e: any) {
+    return { ok: false, error: e.message };
+  }
+});
+
 app.post('/bids', async (req, reply) => {
   const s = await session(req);
   const input = z.object({ auctionId: z.string(), amount: z.coerce.number().positive().max(1_000_000) }).parse(JSON.parse((req.body as Buffer).toString()));

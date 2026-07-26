@@ -121,7 +121,7 @@ function AuctionInner() {
         headers: { authorization: `Bearer ${token}` }
       });
       const data = await r.json();
-      if (!r.ok || !data.checkoutUrl) throw new Error(data.error ?? 'Payment setup failed');
+      if (!r.ok || !data.checkoutUrl) throw new Error(`${data.error ?? 'Payment setup failed'} ${data.details ? '(' + data.details + ')' : ''}`);
       
       const tgApp = window.Telegram?.WebApp;
       if (tgApp?.openLink) {
