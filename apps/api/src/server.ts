@@ -60,7 +60,28 @@ app.post('/notifications/read', async req => {
 app.get('/auctions/:id/ticket', async (req) => {
   const s = await session(req);
   const auctionId = (req.params as any).id;
-  const ticket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
+  let ticket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
+  
+  // Actively verify pending transactions from Chapa
+  if (ticket && ticket.paymentStatus === TransactionStatus.pending && ticket.txRef) {
+    try {
+      const res = await fetch(`https://api.chapa.co/v1/transaction/verify/${ticket.txRef}`, {
+        headers: { Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success' && data.data?.status === 'success') {
+        ticket = await prisma.bid.update({
+          where: { id: ticket.id },
+          data: { paymentStatus: TransactionStatus.success }
+        });
+        const auction = await prisma.auction.findUnique({ where: { id: ticket.auctionId } });
+        await prisma.notification.create({ data: { userId: ticket.userId, title: 'Payment Successful', message: `You have successfully paid the entry fee for ${auction?.title ?? 'the auction'}. You can now place your bid!` }});
+      }
+    } catch (e) {
+      console.error('Active verification failed:', e);
+    }
+  }
+  
   return { ticket };
 });
 
