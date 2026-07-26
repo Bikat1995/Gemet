@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: npm ci --include=dev && npm run db:generate && npm run build -w @gemet/api
-    startCommand: npx prisma migrate resolve --rolled-back 20260725200000_pay_to_bid --schema apps/api/prisma/schema.prisma || true; npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && npm run start -w @gemet/api
+    startCommand: npm run start -w @gemet/api
     healthCheckPath: /health
     autoDeploy: true
     envVars:
