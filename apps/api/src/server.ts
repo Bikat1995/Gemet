@@ -124,25 +124,6 @@ app.post('/auctions/:id/pay', async (req, reply) => {
   }
 });
 
-app.get('/debug-db', async (req, reply) => {
-  try {
-    const bids = await prisma.$queryRaw`SELECT * FROM "Bid" LIMIT 1`;
-    return { ok: true, bids };
-  } catch (e: any) {
-    return { ok: false, error: e.message };
-  }
-});
-
-app.get('/force-migrate', async (req, reply) => {
-  try {
-    const out1 = execSync('npx prisma migrate resolve --rolled-back 20260725200000_pay_to_bid --schema prisma/schema.prisma || true').toString();
-    const out2 = execSync('npx prisma migrate deploy --schema prisma/schema.prisma').toString();
-    return { ok: true, out1, out2 };
-  } catch (e: any) {
-    return { ok: false, error: e.message, stdout: e.stdout?.toString(), stderr: e.stderr?.toString() };
-  }
-});
-
 app.post('/bids', async (req, reply) => {
   const s = await session(req);
   const input = z.object({ auctionId: z.string(), amount: z.coerce.number().positive().max(1_000_000) }).parse(JSON.parse((req.body as Buffer).toString()));
