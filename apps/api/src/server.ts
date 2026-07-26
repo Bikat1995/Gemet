@@ -86,7 +86,8 @@ app.post('/payments/initialize', async (req, reply) => {
   const s = await session(req); const input = z.object({ amount:z.coerce.number().positive() }).parse(JSON.parse((req.body as Buffer).toString()));
   const amount = cents(input.amount); const txRef = `gemet-${crypto.randomUUID()}`;
   await prisma.walletTransaction.create({data:{userId:s.userId,amount,type:TransactionType.deposit,status:TransactionStatus.pending,txRef}});
-  const returnUrl = process.env.TMA_RETURN_URL ?? `${process.env.TMA_URL ?? 'https://gemet.vercel.app'}/wallet`;
+  const tmaUrl = process.env.TMA_URL ?? 'https://gemet.vercel.app';
+  const returnUrl = `${tmaUrl}/payment-done`;
   const res = await fetch('https://api.chapa.co/v1/transaction/initialize', {method:'POST',headers:{Authorization:`Bearer ${process.env.CHAPA_SECRET_KEY}`, 'Content-Type':'application/json'},body:JSON.stringify({amount:etb(amount),currency:'ETB',tx_ref:txRef,callback_url:`${process.env.API_URL}/webhooks/chapa`,return_url:returnUrl})});
   const payload:any = await res.json(); if (!res.ok) return reply.code(502).send({error:'Payment provider unavailable'});
   return { txRef, checkoutUrl:payload.data?.checkout_url };
