@@ -146,18 +146,28 @@ app.post('/webhooks/telegram', async (req, reply) => {
         })
       });
     } else if (msg.text) {
-       // if they send text but aren't clicking a web app button (e.g. typing something)
-       const existingUser = await prisma.user.findUnique({ where: { telegramId: BigInt(msg.from.id) } });
-       if (existingUser && existingUser.phoneNumber) {
-         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
-           method: 'POST', headers: { 'content-type': 'application/json' },
-           body: JSON.stringify({
-             chat_id: chatId,
-             text: 'Please tap one of the buttons in the menu below to interact with the app.',
-             reply_markup: mainMenu
-           })
-         });
-       }
+      const existingUser = await prisma.user.findUnique({ where: { telegramId: BigInt(msg.from.id) } });
+      if (existingUser && existingUser.phoneNumber) {
+        // Registered user — show app menu
+        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: 'Tap a button below to open the app.',
+            reply_markup: mainMenu
+          })
+        });
+      } else {
+        // Not registered — re-ask for phone number
+        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: 'Please share your phone number first to access Gemet. 👇',
+            reply_markup: { keyboard: [[{ text: '📱 Share Phone Number', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
+          })
+        });
+      }
     }
   }
   return { success: true };
