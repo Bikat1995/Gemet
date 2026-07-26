@@ -135,8 +135,8 @@ app.get('/debug-db', async (req, reply) => {
 
 app.get('/force-migrate', async (req, reply) => {
   try {
-    const out1 = execSync('npx prisma migrate resolve --rolled-back 20260725200000_pay_to_bid --schema apps/api/prisma/schema.prisma || true').toString();
-    const out2 = execSync('npx prisma migrate deploy --schema apps/api/prisma/schema.prisma').toString();
+    const out1 = execSync('npx prisma migrate resolve --rolled-back 20260725200000_pay_to_bid --schema prisma/schema.prisma || true').toString();
+    const out2 = execSync('npx prisma migrate deploy --schema prisma/schema.prisma').toString();
     return { ok: true, out1, out2 };
   } catch (e: any) {
     return { ok: false, error: e.message, stdout: e.stdout?.toString(), stderr: e.stderr?.toString() };
