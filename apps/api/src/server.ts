@@ -86,7 +86,8 @@ app.post('/payments/initialize', async (req, reply) => {
   const s = await session(req); const input = z.object({ amount:z.coerce.number().positive() }).parse(JSON.parse((req.body as Buffer).toString()));
   const amount = cents(input.amount); const txRef = `gemet-${crypto.randomUUID()}`;
   await prisma.walletTransaction.create({data:{userId:s.userId,amount,type:TransactionType.deposit,status:TransactionStatus.pending,txRef}});
-  const res = await fetch('https://api.chapa.co/v1/transaction/initialize', {method:'POST',headers:{Authorization:`Bearer ${process.env.CHAPA_SECRET_KEY}`, 'Content-Type':'application/json'},body:JSON.stringify({amount:etb(amount),currency:'ETB',tx_ref:txRef,callback_url:`${process.env.API_URL}/webhooks/chapa`,return_url:process.env.TMA_RETURN_URL})});
+  const returnUrl = process.env.TMA_RETURN_URL ?? `${process.env.TMA_URL ?? 'https://gemet.vercel.app'}/wallet`;
+  const res = await fetch('https://api.chapa.co/v1/transaction/initialize', {method:'POST',headers:{Authorization:`Bearer ${process.env.CHAPA_SECRET_KEY}`, 'Content-Type':'application/json'},body:JSON.stringify({amount:etb(amount),currency:'ETB',tx_ref:txRef,callback_url:`${process.env.API_URL}/webhooks/chapa`,return_url:returnUrl})});
   const payload:any = await res.json(); if (!res.ok) return reply.code(502).send({error:'Payment provider unavailable'});
   return { txRef, checkoutUrl:payload.data?.checkout_url };
 });
@@ -96,15 +97,39 @@ app.post('/webhooks/telegram', async (req, reply) => {
   if (update.message) {
     const msg = update.message;
     const chatId = msg.chat.id;
+    const tmaUrl = process.env.TMA_URL ?? 'https://gemet.vercel.app';
+    
+    const mainMenu = {
+      keyboard: [
+        [{ text: '🎮 Open Gemet App', web_app: { url: tmaUrl } }],
+        [{ text: '👤 My Profile', web_app: { url: `${tmaUrl}/profile` } }, { text: '💰 My Wallet', web_app: { url: `${tmaUrl}/wallet` } }],
+        [{ text: '📜 Live Auctions', web_app: { url: tmaUrl } }, { text: '🔔 Notifications', web_app: { url: `${tmaUrl}/notifications` } }]
+      ],
+      resize_keyboard: true,
+      persistent: true
+    };
+
     if (msg.text === '/start') {
-      await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: 'Welcome to Gemet! 🏆\n\nGemet is the premier unique-bid auction platform where you can win exclusive items (phones, gadgets, machines, and more) for a fraction of their price!\n\nTo start bidding, please register by sharing your phone number below.',
-          reply_markup: { keyboard: [[{ text: '📱 Share Phone Number', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
-        })
-      });
+      const existingUser = await prisma.user.findUnique({ where: { telegramId: BigInt(msg.from.id) } });
+      if (existingUser && existingUser.phoneNumber) {
+        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `Welcome back to Gemet, ${existingUser.username || 'Boss'}! 🏆\n\nUse the menu below to open the app or check your profile.`,
+            reply_markup: mainMenu
+          })
+        });
+      } else {
+        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: 'Welcome to Gemet! 🏆\n\nGemet is the premier unique-bid auction platform where you can win exclusive items for a fraction of their price!\n\nTo start bidding, please register by sharing your phone number below.',
+            reply_markup: { keyboard: [[{ text: '📱 Share Phone Number', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
+          })
+        });
+      }
     } else if (msg.contact) {
       const phone = msg.contact.phone_number;
       await prisma.user.upsert({
@@ -112,20 +137,27 @@ app.post('/webhooks/telegram', async (req, reply) => {
         update: { phoneNumber: phone, username: msg.from.username },
         create: { telegramId: BigInt(msg.from.id), username: msg.from.username, phoneNumber: phone }
       });
-      // Remove keyboard first
-      await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: 'Registration complete! 🎉', reply_markup: { remove_keyboard: true } })
-      });
-      // Send inline button
       await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: 'You can now open Gemet and start bidding on exclusive items at the lowest unique prices.',
-          reply_markup: { inline_keyboard: [[{ text: '🎮 Open Gemet', web_app: { url: process.env.TMA_URL ?? 'https://gemet.vercel.app' } }]] }
+          text: 'Registration complete! 🎉\n\nYou can now use the menu below to open Gemet and start bidding!',
+          reply_markup: mainMenu
         })
       });
+    } else if (msg.text) {
+       // if they send text but aren't clicking a web app button (e.g. typing something)
+       const existingUser = await prisma.user.findUnique({ where: { telegramId: BigInt(msg.from.id) } });
+       if (existingUser && existingUser.phoneNumber) {
+         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+           method: 'POST', headers: { 'content-type': 'application/json' },
+           body: JSON.stringify({
+             chat_id: chatId,
+             text: 'Please tap one of the buttons in the menu below to interact with the app.',
+             reply_markup: mainMenu
+           })
+         });
+       }
     }
   }
   return { success: true };
