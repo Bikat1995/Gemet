@@ -98,67 +98,65 @@ app.post('/webhooks/telegram', async (req, reply) => {
     const msg = update.message;
     const chatId = msg.chat.id;
     const tmaUrl = process.env.TMA_URL ?? 'https://gemet.vercel.app';
-    
-    const mainMenu = {
-      keyboard: [
-        [{ text: '🎮 Open Gemet App', web_app: { url: tmaUrl } }],
-        [{ text: '👤 My Profile', web_app: { url: `${tmaUrl}/profile` } }, { text: '💰 My Wallet', web_app: { url: `${tmaUrl}/wallet` } }],
-        [{ text: '📜 Live Auctions', web_app: { url: tmaUrl } }, { text: '🔔 Notifications', web_app: { url: `${tmaUrl}/notifications` } }]
-      ],
-      resize_keyboard: true,
-      persistent: true
+
+    const openAppButton = {
+      inline_keyboard: [[{ text: '🎮 Open Gemet', web_app: { url: tmaUrl } }]]
     };
 
     if (msg.text === '/start') {
       const existingUser = await prisma.user.findUnique({ where: { telegramId: BigInt(msg.from.id) } });
       if (existingUser && existingUser.phoneNumber) {
+        // Already registered — just show the open button
         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             chat_id: chatId,
-            text: `Welcome back to Gemet, ${existingUser.username || 'Boss'}! 🏆\n\nUse the menu below to open the app or check your profile.`,
-            reply_markup: mainMenu
+            text: `Welcome back to Gemet, ${existingUser.username || 'there'}! 🏆\n\nTap below to open the app.`,
+            reply_markup: openAppButton
           })
         });
       } else {
+        // New user — ask for phone number only, no app button
         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             chat_id: chatId,
-            text: 'Welcome to Gemet! 🏆\n\nGemet is the premier unique-bid auction platform where you can win exclusive items for a fraction of their price!\n\nTo start bidding, please register by sharing your phone number below.',
+            text: 'Welcome to Gemet! 🏆\n\nGemet is the premier unique-bid auction platform where you can win exclusive items for a fraction of their price!\n\nTo start bidding, please register by sharing your phone number.',
             reply_markup: { keyboard: [[{ text: '📱 Share Phone Number', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
           })
         });
       }
     } else if (msg.contact) {
+      // User shared their phone — save it
       const phone = msg.contact.phone_number;
       await prisma.user.upsert({
         where: { telegramId: BigInt(msg.from.id) },
         update: { phoneNumber: phone, username: msg.from.username },
         create: { telegramId: BigInt(msg.from.id), username: msg.from.username, phoneNumber: phone }
       });
+      // Remove the keyboard, then send the Open App button
+      await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: 'Registration complete! 🎉', reply_markup: { remove_keyboard: true } })
+      });
       await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: 'Registration complete! 🎉\n\nYou can now use the menu below to open Gemet and start bidding!',
-          reply_markup: mainMenu
+          text: 'You can now open Gemet and start bidding!',
+          reply_markup: openAppButton
         })
       });
     } else if (msg.text) {
+      // Any other text — check registration status
       const existingUser = await prisma.user.findUnique({ where: { telegramId: BigInt(msg.from.id) } });
       if (existingUser && existingUser.phoneNumber) {
-        // Registered user — show app menu
         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: 'Tap a button below to open the app.',
-            reply_markup: mainMenu
-          })
+          body: JSON.stringify({ chat_id: chatId, text: 'Tap below to open Gemet.', reply_markup: openAppButton })
         });
       } else {
-        // Not registered — re-ask for phone number
+        // Not registered — re-prompt for phone number
         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
