@@ -1,4 +1,4 @@
-﻿-- DropForeignKey
+-- DropForeignKey
 ALTER TABLE "WalletTransaction" DROP CONSTRAINT "WalletTransaction_user_id_fkey";
 
 -- AlterTable
