@@ -61,6 +61,8 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       })
       .then(data => {
         // Auth succeeded — set phoneNumber from DB
+        // Also store token globally so wallet page can wait for it
+        if (data.token) (window as any).__tgToken = data.token;
         setState({
           isTelegram: true,
           initData,

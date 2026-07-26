@@ -26,7 +26,7 @@ app.post('/auth/telegram', async (req, reply) => {
   }
   if (!telegram) return reply.code(401).send({ error: 'Invalid Telegram initData' });
   const user = await prisma.user.upsert({ where: { telegramId: BigInt(telegram.id) }, update: { username: telegram.username }, create: { telegramId: BigInt(telegram.id), username: telegram.username } });
-  return { token: app.jwt.sign({ userId: user.id, telegramId: String(user.telegramId) }), user: { id:user.id, username:user.username, phoneNumber:user.phoneNumber, balance:etb(user.walletBalance) } };
+  return { token: app.jwt.sign({ userId: user.id, telegramId: String(user.telegramId) }), user: { id:user.id, username:user.username, phoneNumber:user.phoneNumber } };
 });
 
 app.get('/health', async () => ({ ok: true, service: 'gemet-api' }));
@@ -36,16 +36,11 @@ app.get('/auctions', async (req) => {
   const where = { status: AuctionStatus.active, ...(cat && cat !== 'All' ? { category: cat } : {}) };
   return { auctions: (await prisma.auction.findMany({ where, orderBy:{ endTime:'asc' } })).map(presentAuction) };
 });
-app.get('/wallet', async req => { const s = await session(req); const u = await prisma.user.findUniqueOrThrow({where:{id:s.userId}}); return { balance:etb(u.walletBalance) }; });
-app.get('/wallet/history', async req => {
-  const s = await session(req);
-  const txs = await prisma.walletTransaction.findMany({ where:{ userId: s.userId }, orderBy: { createdAt: 'desc' } });
-  return { transactions: txs.map(t => ({ id: t.id, amount: etb(Math.abs(t.amount)), isDeposit: t.amount > 0, status: t.status, date: t.createdAt })) };
-});
+// Removed /wallet and /wallet/history
 app.get('/bids/history', async req => {
   const s = await session(req);
-  const bids = await prisma.bid.findMany({ where:{ userId: s.userId }, include: { auction: true }, orderBy: { createdAt: 'desc' } });
-  return { bids: bids.map(b => ({ id: b.id, amount: etb(b.amount), status: b.status, date: b.createdAt, auction: { title: b.auction.title, status: b.auction.status, imageUrl: b.auction.imageUrl } })) };
+  const bids = await prisma.bid.findMany({ where:{ userId: s.userId, amount: { not: null } }, include: { auction: true }, orderBy: { createdAt: 'desc' } });
+  return { bids: bids.map(b => ({ id: b.id, amount: b.amount != null ? etb(b.amount) : null, ticketNumber: b.ticketNumber, status: b.status, date: b.createdAt, auction: { title: b.auction.title, status: b.auction.status, imageUrl: b.auction.imageUrl } })) };
 });
 app.get('/winners', async () => {
   const winners = await prisma.auctionWinner.findMany({ include: { auction: true, user: true }, orderBy: { declaredAt: 'desc' } });
@@ -61,36 +56,82 @@ app.post('/notifications/read', async req => {
   return { success: true };
 });
 
-app.post('/bids', async (req, reply) => {
-  const s = await session(req); const input = z.object({ auctionId:z.string(), amount:z.coerce.number().positive().max(1_000_000) }).parse(JSON.parse((req.body as Buffer).toString()));
-  const amount = cents(input.amount);
-  const auction = await prisma.auction.findUnique({ where:{id:input.auctionId} });
-  if (!auction || auction.status !== AuctionStatus.active || auction.startTime > new Date() || auction.endTime <= new Date()) return reply.code(409).send({ error:'Auction is not accepting bids' });
-  try {
-    // Serialisable wallet debit and immutable bid record. The fee is deliberately never refunded.
-    const bid = await prisma.$transaction(async tx => {
-      const user = await tx.user.findUniqueOrThrow({where:{id:s.userId}});
-      if (user.walletBalance < auction.entryFee) throw new Error('INSUFFICIENT_FUNDS');
-      await tx.user.update({where:{id:s.userId},data:{walletBalance:{decrement:auction.entryFee}}});
-      await tx.walletTransaction.create({data:{userId:s.userId,amount:-auction.entryFee,type:TransactionType.bid_fee,status:TransactionStatus.success}});
-      return tx.bid.create({data:{auctionId:auction.id,userId:s.userId,amount,status:BidStatus.created}});
-    }, { isolationLevel:'Serializable' });
-    const state = await registerBid(auction.id, amount);
-    // A second matching bid invalidates every matching bid, including the original.
-    await prisma.bid.updateMany({where:{auctionId:auction.id,amount},data:{status:state.unique ? BidStatus.unique : BidStatus.duplicated, calculatedAt:new Date()}});
-    return { id:bid.id, amount:etb(amount), unique:state.unique, frequency:state.frequency, fee:etb(auction.entryFee) };
-  } catch (e: any) { return reply.code(e.message === 'INSUFFICIENT_FUNDS' ? 402 : 409).send({error:e.message === 'INSUFFICIENT_FUNDS' ? 'Insufficient wallet balance' : 'Could not place bid; retry safely'}); }
+app.get('/auctions/:id/ticket', async (req) => {
+  const s = await session(req);
+  const auctionId = (req.params as any).id;
+  const ticket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
+  return { ticket };
 });
 
-app.post('/payments/initialize', async (req, reply) => {
-  const s = await session(req); const input = z.object({ amount:z.coerce.number().positive() }).parse(JSON.parse((req.body as Buffer).toString()));
-  const amount = cents(input.amount); const txRef = `gemet-${crypto.randomUUID()}`;
-  await prisma.walletTransaction.create({data:{userId:s.userId,amount,type:TransactionType.deposit,status:TransactionStatus.pending,txRef}});
+app.post('/auctions/:id/pay', async (req, reply) => {
+  const s = await session(req);
+  const auctionId = (req.params as any).id;
+  const auction = await prisma.auction.findUnique({ where: { id: auctionId } });
+  if (!auction || auction.status !== AuctionStatus.active) return reply.code(404).send({ error: 'Auction not found or not active' });
+  
+  // Check if they already have a pending or success ticket
+  const existingTicket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
+  if (existingTicket?.paymentStatus === TransactionStatus.success && existingTicket.amount == null) {
+    return reply.code(400).send({ error: 'You already paid. Please submit your bid.' });
+  }
+
+  const txRef = `gemet-${crypto.randomUUID()}`;
+  
+  await prisma.bid.create({
+    data: {
+      userId: s.userId,
+      auctionId,
+      txRef,
+      paymentStatus: TransactionStatus.pending
+    }
+  });
+
   const tmaUrl = process.env.TMA_URL ?? 'https://gemet.vercel.app';
-  const returnUrl = `${tmaUrl}/payment-done`;
-  const res = await fetch('https://api.chapa.co/v1/transaction/initialize', {method:'POST',headers:{Authorization:`Bearer ${process.env.CHAPA_SECRET_KEY}`, 'Content-Type':'application/json'},body:JSON.stringify({amount:etb(amount),currency:'ETB',tx_ref:txRef,callback_url:`${process.env.API_URL}/webhooks/chapa`,return_url:returnUrl})});
-  const payload:any = await res.json(); if (!res.ok) return reply.code(502).send({error:'Payment provider unavailable'});
-  return { txRef, checkoutUrl:payload.data?.checkout_url };
+  // Redirect right back to the bidding page
+  const returnUrl = `${tmaUrl}/auction/${auctionId}`;
+  
+  const res = await fetch('https://api.chapa.co/v1/transaction/initialize', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount: etb(auction.entryFee),
+      currency: 'ETB',
+      tx_ref: txRef,
+      callback_url: `${process.env.API_URL}/webhooks/chapa`,
+      return_url: returnUrl
+    })
+  });
+  const payload: any = await res.json();
+  if (!res.ok) return reply.code(502).send({ error: 'Payment provider unavailable' });
+  return { txRef, checkoutUrl: payload.data?.checkout_url };
+});
+
+app.post('/bids', async (req, reply) => {
+  const s = await session(req);
+  const input = z.object({ auctionId: z.string(), amount: z.coerce.number().positive().max(1_000_000) }).parse(JSON.parse((req.body as Buffer).toString()));
+  const amount = cents(input.amount);
+  const auction = await prisma.auction.findUnique({ where: { id: input.auctionId } });
+  if (!auction || auction.status !== AuctionStatus.active || auction.startTime > new Date() || auction.endTime <= new Date()) return reply.code(409).send({ error: 'Auction is not accepting bids' });
+  
+  try {
+    const bid = await prisma.$transaction(async tx => {
+      // Find the user's paid ticket that doesn't have an amount yet
+      const ticket = await tx.bid.findFirst({ where: { userId: s.userId, auctionId: auction.id, paymentStatus: TransactionStatus.success, amount: null } });
+      if (!ticket) throw new Error('NO_TICKET');
+      
+      return tx.bid.update({
+        where: { id: ticket.id },
+        data: { amount, status: BidStatus.created }
+      });
+    }, { isolationLevel: 'Serializable' });
+    
+    const state = await registerBid(auction.id, amount);
+    await prisma.bid.updateMany({ where: { auctionId: auction.id, amount }, data: { status: state.unique ? BidStatus.unique : BidStatus.duplicated, calculatedAt: new Date() } });
+    
+    return { id: bid.id, ticketNumber: bid.ticketNumber, amount: etb(amount), unique: state.unique, frequency: state.frequency };
+  } catch (e: any) {
+    return reply.code(e.message === 'NO_TICKET' ? 402 : 409).send({ error: e.message === 'NO_TICKET' ? 'You must pay the entry fee first' : 'Could not place bid; retry safely' });
+  }
 });
 
 app.post('/webhooks/telegram', async (req, reply) => {
@@ -205,14 +246,38 @@ app.post('/webhooks/chapa', async (req, reply) => {
   if (!validChapaSignature(raw, req.headers['x-chapa-signature'] as string)) return reply.code(401).send({error:'Invalid signature'});
   const event:any = JSON.parse(raw); const txRef = event.tx_ref ?? event.data?.tx_ref; const success = (event.status ?? event.data?.status) === 'success';
   if (!txRef || !success) return { received:true };
-  // Unique txRef plus status predicate means webhook retries cannot double-credit a wallet.
+  
   await prisma.$transaction(async tx => {
-    const payment = await tx.walletTransaction.findUnique({where:{txRef}}); if (!payment || payment.status === TransactionStatus.success) return;
-    await tx.walletTransaction.update({where:{id:payment.id},data:{status:TransactionStatus.success}});
-    await tx.user.update({where:{id:payment.userId},data:{walletBalance:{increment:payment.amount}}});
-    await tx.notification.create({data:{userId:payment.userId,title:'Deposit Successful',message:`Your deposit of ${etb(payment.amount)} ETB has been credited to your wallet.`}});
+    const ticket = await tx.bid.findUnique({where:{txRef}}); 
+    if (!ticket || ticket.paymentStatus === TransactionStatus.success) return;
+    
+    await tx.bid.update({where:{id:ticket.id},data:{paymentStatus:TransactionStatus.success}});
+    const auction = await tx.auction.findUnique({where:{id:ticket.auctionId}});
+    await tx.notification.create({data:{userId:ticket.userId,title:'Payment Successful',message:`You have successfully paid the entry fee for ${auction?.title ?? 'the auction'}. You can now place your bid!`}});
   }, { isolationLevel:'Serializable' });
   return { received:true };
+});
+
+app.get('/tickets/all', async (req) => {
+  const auctions = await prisma.auction.findMany({
+    orderBy: { endTime: 'asc' },
+    select: {
+      id: true,
+      title: true,
+      imageUrl: true,
+      bids: {
+        where: { paymentStatus: TransactionStatus.success },
+        select: {
+          ticketNumber: true,
+          status: true,
+          createdAt: true,
+          user: { select: { username: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      }
+    }
+  });
+  return { auctions };
 });
 
 app.get('/events/:auctionId', { websocket:true }, (socket, req) => {
@@ -225,9 +290,16 @@ app.get('/events/:auctionId', { websocket:true }, (socket, req) => {
 app.get('/admin/stats', async () => {
   const users = await prisma.user.count();
   const auctions = await prisma.auction.count({ where: { status: AuctionStatus.active } });
-  const txs = await prisma.walletTransaction.aggregate({ _sum: { amount: true }, where: { type: TransactionType.deposit, status: TransactionStatus.success } });
-  const bids = await prisma.bid.count();
-  return { users, liveAuctions: auctions, totalDeposits: etb(txs._sum.amount ?? 0), totalBids: bids };
+  
+  // Calculate total revenue from tickets
+  const tickets = await prisma.bid.findMany({ 
+    where: { paymentStatus: TransactionStatus.success },
+    include: { auction: { select: { entryFee: true } } }
+  });
+  const totalRevenueCents = tickets.reduce((acc, t) => acc + (t.auction?.entryFee || 0), 0);
+  
+  const bids = await prisma.bid.count({ where: { amount: { not: null } } });
+  return { users, liveAuctions: auctions, totalDeposits: etb(totalRevenueCents), totalBids: bids };
 });
 app.get('/admin/users', async () => {
   const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });

@@ -38,10 +38,8 @@ model User {
   username String?
   phoneNumber String? @map("phone_number")
   isAdmin Boolean @default(false) @map("is_admin")
-  walletBalance Int @default(0) @map("wallet_balance") // cents
   createdAt DateTime @default(now())
   bids Bid[]
-  transactions WalletTransaction[]
   wins AuctionWinner[]
   notifications Notification[]
 }
@@ -60,26 +58,24 @@ model Auction {
 }
 model Bid {
   id String @id @default(cuid())
+  ticketNumber String @unique @default(cuid()) @map("ticket_number")
   auctionId String @map("auction_id")
   userId String @map("user_id")
-  amount Int // cents
+  
+  // Payment info
+  txRef String? @unique @map("tx_ref")
+  paymentStatus TransactionStatus @default(pending) @map("payment_status")
+  
+  // Bid info (optional until placed)
+  amount Int? // cents
   status BidStatus @default(created)
   calculatedAt DateTime? @map("calculated_at")
   createdAt DateTime @default(now())
+  
   auction Auction @relation(fields:[auctionId],references:[id])
   user User @relation(fields:[userId],references:[id])
+  
   @@index([auctionId,amount])
-}
-model WalletTransaction {
-  id String @id @default(cuid())
-  userId String @map("user_id")
-  amount Int // cents; positive deposits, negative bid fees
-  type TransactionType
-  txRef String? @unique @map("tx_ref")
-  status TransactionStatus @default(pending)
-  createdAt DateTime @default(now())
-  user User @relation(fields:[userId],references:[id])
-  @@index([userId,createdAt])
 }
 model AuctionWinner {
   auctionId String @id @map("auction_id")

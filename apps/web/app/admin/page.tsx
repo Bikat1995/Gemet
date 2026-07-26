@@ -193,7 +193,6 @@ export default function AdminDashboard() {
                     <tr>
                       <th className="px-4 py-3 rounded-tl-lg">User</th>
                       <th className="px-4 py-3">Phone</th>
-                      <th className="px-4 py-3">Balance (cents)</th>
                       <th className="px-4 py-3 rounded-tr-lg">Joined</th>
                     </tr>
                   </thead>
@@ -202,7 +201,6 @@ export default function AdminDashboard() {
                       <tr key={u.id} className="border-b border-white/5">
                         <td className="px-4 py-3 font-medium text-white">{u.username || 'Anonymous'}</td>
                         <td className="px-4 py-3 text-cyan-300">{u.phoneNumber || 'Not provided'}</td>
-                        <td className="px-4 py-3 text-emerald-400 font-mono">{u.walletBalance}</td>
                         <td className="px-4 py-3 text-slate-400">{new Date(u.createdAt).toLocaleDateString()}</td>
                       </tr>
                     ))}

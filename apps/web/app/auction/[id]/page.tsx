@@ -2,7 +2,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import { useEffect, useState, Suspense } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useLanguage } from '../../components/LanguageProvider';
 import { Icon } from '../../components/Icons';
 
@@ -19,25 +19,31 @@ export default function Auction() {
 function AuctionInner() {
   const p = useParams();
   const { t } = useLanguage();
+  const router = useRouter();
   const id = p.id as string;
 
   const [value, setValue] = useState('');
-  const [balance, setBalance] = useState('0.00');
   const [token, setToken] = useState('');
   const [auction, setAuction] = useState<any>(null);
+  const [ticket, setTicket] = useState<any>(null);
+  
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [notice, setNotice] = useState<{ kind: 'idle' | 'unique' | 'duplicate' | 'error'; text: string }>({
+  
+  const [notice, setNotice] = useState<{ kind: 'idle' | 'unique' | 'duplicate' | 'error' | 'success'; text: string }>({
     kind: 'idle',
-    text: 'Enter your unique bid amount below',
+    text: '',
   });
 
-  // 1. Authenticate with Telegram and get token + balance
+  // 1. Authenticate with Telegram and get token
   useEffect(() => {
     window.Telegram?.WebApp?.ready();
     window.Telegram?.WebApp?.expand();
     const init = window.Telegram?.WebApp?.initData;
-    if (!init) return;
+    if (!init) {
+      setLoading(false);
+      return;
+    }
 
     fetch(`${api}/auth/telegram`, {
       method: 'POST',
@@ -47,28 +53,42 @@ function AuctionInner() {
       .then(r => r.json())
       .then(x => {
         if (x.token) setToken(x.token);
-        if (x.user?.balance) setBalance(x.user.balance);
       })
-      .catch(() => {});
+      .catch(() => setLoading(false));
   }, []);
 
-  // 2. Fetch the specific auction by ID
+  // 2. Fetch the specific auction and user's ticket status
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
-    fetch(`${api}/auctions`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(x => {
-        const found = x?.auctions?.find((a: any) => a.id === id);
-        if (found) setAuction(found);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [id]);
+    
+    const fetchAuction = fetch(`${api}/auctions`).then(r => r.ok ? r.json() : null);
+    
+    if (token) {
+      setLoading(true);
+      const fetchTicket = fetch(`${api}/auctions/${id}/ticket`, {
+        headers: { authorization: `Bearer ${token}` }
+      }).then(r => r.ok ? r.json() : null);
 
-  // 3. WebSocket for real-time duplicate detection
+      Promise.all([fetchAuction, fetchTicket])
+        .then(([aData, tData]) => {
+          const found = aData?.auctions?.find((a: any) => a.id === id);
+          if (found) setAuction(found);
+          if (tData?.ticket) setTicket(tData.ticket);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      // Fetch just auction if not authenticated yet
+      fetchAuction.then(aData => {
+        const found = aData?.auctions?.find((a: any) => a.id === id);
+        if (found) setAuction(found);
+      }).finally(() => setLoading(false));
+    }
+  }, [id, token]);
+
+  // 3. WebSocket for real-time duplicate detection (only active when placing bid)
   useEffect(() => {
-    if (!id) return;
+    if (!id || ticket?.amount != null) return;
+    
     const wsUrl = api.replace(/^http/, 'ws') + `/events/${id}`;
     let ws: WebSocket;
     try {
@@ -86,7 +106,35 @@ function AuctionInner() {
     return () => {
       try { ws?.close(); } catch {}
     };
-  }, [id, value]);
+  }, [id, value, ticket]);
+
+  const payEntryFee = async () => {
+    if (!token) {
+      setNotice({ kind: 'error', text: 'Authentication failed. Please reopen the app.' });
+      return;
+    }
+    setSubmitting(true);
+    setNotice({ kind: 'idle', text: 'Opening payment...' });
+    try {
+      const r = await fetch(`${api}/auctions/${id}/pay`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}` }
+      });
+      const data = await r.json();
+      if (!r.ok || !data.checkoutUrl) throw new Error(data.error ?? 'Payment setup failed');
+      
+      const tgApp = window.Telegram?.WebApp;
+      if (tgApp?.openLink) {
+        tgApp.openLink(data.checkoutUrl, { try_instant_view: false });
+      } else {
+        window.open(data.checkoutUrl, '_blank');
+      }
+    } catch (e: any) {
+      setNotice({ kind: 'error', text: e.message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const press = (x: string | number) => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
@@ -97,11 +145,8 @@ function AuctionInner() {
     }
   };
 
-  const submit = async () => {
-    if (!value || !token) {
-      setNotice({ kind: 'error', text: token ? 'Please enter a bid amount.' : 'Authentication failed — reopen the app.' });
-      return;
-    }
+  const submitBid = async () => {
+    if (!value || !token) return;
     setSubmitting(true);
     try {
       const r = await fetch(`${api}/bids`, {
@@ -113,8 +158,7 @@ function AuctionInner() {
       if (!r.ok) {
         setNotice({ kind: 'error', text: x.error ?? 'Bid failed. Try again.' });
       } else {
-        const fee = Number(auction?.entryFee ?? 0);
-        setBalance(b => (Number(b) - fee).toFixed(2));
+        setTicket({ ...ticket, amount: x.amount, ticketNumber: x.ticketNumber });
         if (x.unique) {
           setNotice({ kind: 'unique', text: `✅ Unique bid placed: ${value} ETB` });
           window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
@@ -122,7 +166,6 @@ function AuctionInner() {
           setNotice({ kind: 'duplicate', text: `⚠️ Duplicate bid: ${value} ETB — someone else bid this too!` });
           window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
         }
-        setValue('');
       }
     } catch (e: any) {
       setNotice({ kind: 'error', text: 'Network error — check your connection.' });
@@ -134,10 +177,18 @@ function AuctionInner() {
   const title = auction?.title ?? 'Loading auction...';
   const fee = auction?.entryFee ?? '0.00';
   const img = auction?.imageUrl || 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=900&q=85';
-  const bad = notice.kind === 'duplicate' || notice.kind === 'error';
+  
+  // Determine view state
+  const hasPaid = ticket?.paymentStatus === 'success';
+  const hasBid = ticket?.amount != null;
+  
+  let noticeColor = 'border-slate-500/40 bg-slate-950/35';
+  if (notice.kind === 'error') noticeColor = 'border-red-500/50 bg-red-950/45';
+  if (notice.kind === 'duplicate') noticeColor = 'border-orange-500/50 bg-orange-950/45';
+  if (notice.kind === 'unique' || notice.kind === 'success') noticeColor = 'border-emerald-500/40 bg-emerald-950/35';
 
   return (
-    <main className="app-shell mx-auto min-h-screen max-w-md px-4 pb-8 pt-5">
+    <main className="app-shell mx-auto min-h-screen max-w-md px-4 pb-28 pt-5">
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-1 text-xs text-cyan-300">
@@ -165,55 +216,103 @@ function AuctionInner() {
         </div>
       </motion.section>
 
-      {/* Status Banner */}
-      <section className={`mt-4 rounded-xl border p-3 ${bad ? 'border-red-500/50 bg-red-950/45' : 'border-emerald-500/40 bg-emerald-950/35'}`}>
-        <small className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Bid Status</small>
-        <AnimatePresence mode="wait">
-          <motion.p
-            key={notice.text}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="m-0 mt-1 text-sm font-semibold"
-          >
-            {notice.text}
-          </motion.p>
-        </AnimatePresence>
-      </section>
+      {notice.text && (
+        <section className={`mt-4 rounded-xl border p-3 ${noticeColor}`}>
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={notice.text}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="m-0 text-sm font-semibold"
+            >
+              {notice.text}
+            </motion.p>
+          </AnimatePresence>
+        </section>
+      )}
 
-      {/* Wallet Balance */}
-      <div className="tile mt-4 flex items-center justify-between rounded-xl px-3 py-3">
-        <span className="text-xs text-slate-400">{t.wallet}</span>
-        <b className="mono text-sm text-cyan-300">{balance} ETB</b>
-      </div>
+      {loading ? (
+        <div className="mt-10 text-center text-slate-500">Loading auction status...</div>
+      ) : hasBid ? (
+        // --- STATE: COMPLETED BID ---
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 space-y-4">
+          <div className="tile relative overflow-hidden rounded-2xl p-6 text-center border border-cyan-500/30">
+            <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-cyan-400/15 blur-2xl" />
+            <Icon name="ticket" size={40} className="mx-auto text-cyan-400 mb-3" />
+            <h2 className="text-lg font-bold text-white mb-1">Your Ticket</h2>
+            <p className="text-xs text-slate-400 mb-4">Proof of participation</p>
+            
+            <div className="mono text-3xl font-black text-cyan-300 mb-2">{ticket.amount} <span className="text-sm">ETB</span></div>
+            <div className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Your Bid Amount</div>
+            
+            <div className="mt-6 pt-4 border-t border-white/10 border-dashed">
+              <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Ticket ID</div>
+              <div className="mono text-lg font-bold text-white">{ticket.ticketNumber}</div>
+            </div>
+          </div>
+          <Link href="/tickets" className="block w-full text-center py-3 rounded-xl bg-[#141923] text-cyan-300 font-semibold border border-white/5">
+            View All Tickets
+          </Link>
+        </motion.div>
+      ) : hasPaid ? (
+        // --- STATE: PAID, NEEDS BID ---
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="text-center mt-6 mb-2">
+            <h2 className="text-lg font-bold">Payment Confirmed!</h2>
+            <p className="text-sm text-slate-400">Enter your unique bid amount</p>
+          </div>
+          
+          <div className="mono my-4 flex items-center justify-center rounded-xl border border-cyan-500/50 bg-[#101722] px-3 py-4 text-4xl font-bold focus-within:border-cyan-400 focus-within:shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+            <span className="min-w-[4ch] text-center text-white">{value || '0'}</span>
+            <small className="ml-2 text-base text-cyan-500">ETB</small>
+          </div>
 
-      {/* Bid Amount Display */}
-      <div className="mono my-4 flex items-center justify-center rounded-xl border border-cyan-500/50 bg-[#101722] px-3 py-4 text-4xl font-bold focus-within:border-cyan-400 focus-within:shadow-[0_0_15px_rgba(34,211,238,0.2)]">
-        <span className="min-w-[4ch] text-center text-white">{value || '0'}</span>
-        <small className="ml-2 text-base text-cyan-500">ETB</small>
-      </div>
+          <div className="grid grid-cols-3 gap-2">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0, '⌫'].map(n => (
+              <button
+                key={n}
+                onClick={() => press(n)}
+                className="tile h-[52px] rounded-xl text-lg font-bold active:scale-95 transition-transform"
+              >
+                {n}
+              </button>
+            ))}
+          </div>
 
-      {/* Numpad */}
-      <div className="grid grid-cols-3 gap-2">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0, '⌫'].map(n => (
           <button
-            key={n}
-            onClick={() => press(n)}
-            className="tile h-[52px] rounded-xl text-lg font-bold active:scale-95 transition-transform"
+            disabled={!value || submitting}
+            onClick={submitBid}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 py-3.5 text-sm font-bold text-slate-950 shadow-[0_0_22px_rgba(6,182,212,.25)] disabled:opacity-50 transition-opacity"
           >
-            {n}
+            <Icon name="ticket" size={18} />
+            {submitting ? 'Submitting...' : `Submit Ticket`}
           </button>
-        ))}
-      </div>
-
-      {/* Submit Button */}
-      <button
-        disabled={!value || submitting}
-        onClick={submit}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 py-3.5 text-sm font-bold text-slate-950 shadow-[0_0_22px_rgba(6,182,212,.25)] disabled:opacity-50 transition-opacity"
-      >
-        <Icon name="plus" size={16} />
-        {submitting ? 'Placing Bid...' : `${t.submit} · ${fee} ETB`}
-      </button>
+        </motion.div>
+      ) : (
+        // --- STATE: NOT ENTERED ---
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-8 text-center">
+          <div className="tile p-6 rounded-2xl mb-4">
+            <Icon name="ticket" size={32} className="mx-auto text-cyan-400 mb-3" />
+            <h2 className="text-lg font-bold mb-2">Buy a Ticket to Enter</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              Pay the entry fee to secure your ticket. Once paid, you can submit your lowest unique bid!
+            </p>
+            <div className="text-2xl font-black text-white">{fee} <span className="text-sm text-cyan-500">ETB</span></div>
+          </div>
+          
+          <button
+            disabled={submitting || ticket?.paymentStatus === 'pending'}
+            onClick={payEntryFee}
+            className="glow flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-500 py-3.5 text-sm font-bold text-slate-950 shadow-[0_0_22px_rgba(16,185,129,.25)] disabled:opacity-50"
+          >
+            {submitting ? 'Connecting...' : ticket?.paymentStatus === 'pending' ? 'Payment Pending...' : `Pay Entry Fee via Chapa`}
+          </button>
+          
+          {ticket?.paymentStatus === 'pending' && (
+            <p className="text-xs text-orange-400 mt-3">Waiting for Chapa confirmation... you can try paying again if it failed.</p>
+          )}
+        </motion.div>
+      )}
     </main>
   );
 }
