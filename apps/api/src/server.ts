@@ -64,46 +64,63 @@ app.get('/auctions/:id/ticket', async (req) => {
 });
 
 app.post('/auctions/:id/pay', async (req, reply) => {
-  const s = await session(req);
-  const auctionId = (req.params as any).id;
-  const auction = await prisma.auction.findUnique({ where: { id: auctionId } });
-  if (!auction || auction.status !== AuctionStatus.active) return reply.code(404).send({ error: 'Auction not found or not active' });
-  
-  // Check if they already have a pending or success ticket
-  const existingTicket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
-  if (existingTicket?.paymentStatus === TransactionStatus.success && existingTicket.amount == null) {
-    return reply.code(400).send({ error: 'You already paid. Please submit your bid.' });
-  }
-
-  const txRef = `gemet-${crypto.randomUUID()}`;
-  
-  await prisma.bid.create({
-    data: {
-      userId: s.userId,
-      auctionId,
-      txRef,
-      paymentStatus: TransactionStatus.pending
+  try {
+    const s = await session(req);
+    const auctionId = (req.params as any).id;
+    
+    const auction = await prisma.auction.findUnique({ where: { id: auctionId } });
+    if (!auction || auction.status !== AuctionStatus.active) return reply.code(404).send({ error: 'Auction not found or not active' });
+    
+    const existingTicket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
+    if (existingTicket?.paymentStatus === TransactionStatus.success && existingTicket.amount == null) {
+      return reply.code(400).send({ error: 'You already paid. Please submit your bid.' });
     }
-  });
 
-  const tmaUrl = process.env.TMA_URL ?? 'https://gemet.vercel.app';
-  // Redirect right back to the bidding page
-  const returnUrl = `${tmaUrl}/auction/${auctionId}`;
-  
-  const res = await fetch('https://api.chapa.co/v1/transaction/initialize', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      amount: etb(auction.entryFee),
-      currency: 'ETB',
-      tx_ref: txRef,
-      callback_url: `${process.env.API_URL}/webhooks/chapa`,
-      return_url: returnUrl
-    })
-  });
-  const payload: any = await res.json();
-  if (!res.ok) return reply.code(502).send({ error: 'Payment provider unavailable' });
-  return { txRef, checkoutUrl: payload.data?.checkout_url };
+    const txRef = `gemet-${crypto.randomUUID()}`;
+    
+    await prisma.bid.create({
+      data: {
+        userId: s.userId,
+        auctionId,
+        txRef,
+        paymentStatus: TransactionStatus.pending
+      }
+    });
+
+    const tmaUrl = process.env.TMA_URL ?? 'https://gemet.vercel.app';
+    const returnUrl = `${tmaUrl}/auction/${auctionId}`;
+    
+    const res = await fetch('https://api.chapa.co/v1/transaction/initialize', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: etb(auction.entryFee),
+        currency: 'ETB',
+        tx_ref: txRef,
+        callback_url: `${process.env.API_URL}/webhooks/chapa`,
+        return_url: returnUrl
+      })
+    });
+    
+    const rawText = await res.text();
+    let payload: any;
+    try {
+      payload = JSON.parse(rawText);
+    } catch (e) {
+      console.error('Chapa non-JSON response:', rawText);
+      return reply.code(502).send({ error: 'Payment provider error', details: rawText });
+    }
+    
+    if (!res.ok) {
+      console.error('Chapa Error:', payload);
+      return reply.code(502).send({ error: 'Payment provider unavailable', details: payload });
+    }
+    
+    return { txRef, checkoutUrl: payload.data?.checkout_url };
+  } catch (err: any) {
+    console.error('Pay Endpoint Error:', err);
+    return reply.code(500).send({ error: 'Internal Server Error', details: err.message });
+  }
 });
 
 app.post('/bids', async (req, reply) => {
