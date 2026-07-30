@@ -5,7 +5,7 @@ import { Icon } from '../components/Icons';
 type Stats = { users: number; liveAuctions: number; totalDeposits: string; totalBids: number };
 type User = { id: string; username: string; phoneNumber: string; walletBalance: number; createdAt: string; };
 type Auction = { id: string; title: string; entryFee: string; status: string; };
-type Winner = { auctionId: string; title: string; username: string; phoneNumber: string; winningBidAmount: string; date: string; };
+type Winner = { auctionId: string; title: string; description?: string; category?: string; username: string; phoneNumber: string; winningBidAmount: string; date: string; };
 type PendingPayment = { id: string; username: string; phoneNumber: string | null; auctionTitle: string; entryFee: string; paymentMethod: string | null; txId: string | null; createdAt: string; };
 
 export default function AdminDashboard() {
