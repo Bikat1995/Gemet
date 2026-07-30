@@ -1,4 +1,30 @@
 import type { SVGProps } from 'react';
-export type IconName='home'|'bids'|'wallet'|'user'|'bell'|'menu'|'search'|'filter'|'chevron'|'clock'|'plus'|'eye'|'sliders'|'arrow'|'card'|'help'|'settings'|'history'|'download'|'ticket';
-const paths:Record<IconName,string>={home:'M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5v-9ZM9 21v-6h6v6',bids:'M7 3h10v18H7zM9.5 8h5m-5 4h5m-5 4h3',wallet:'M4 7h15a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h12M16 14h5m-2.5-2.5v5',user:'M20 21a8 8 0 0 0-16 0M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9',bell:'M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',menu:'M4 7h16M4 12h16M4 17h16',search:'m21 21-4.2-4.2M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0',filter:'M4 6h16M7 12h10M10 18h4',chevron:'m9 18 6-6-6-6',clock:'M12 7v5l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0',plus:'M12 5v14M5 12h14',eye:'M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6',sliders:'M4 7h16M4 17h16M8 7v4m8 6v4',arrow:'M5 12h14m-5-5 5 5-5 5',card:'M3 6h18v12H3zM3 10h18M7 16h3',help:'M9.1 9a3 3 0 1 1 5.8 1c0 2-2.9 2-2.9 4m.05 4h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',settings:'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm0-13v3m0 13v3m9.5-9.5h-3m-13 0h-3m16.2-6.7-2.1 2.1M7.4 16.6l-2.1 2.1m0-13.4 2.1 2.1m9.2 9.2 2.1 2.1',history:'M3 12a9 9 0 1 0 3-6.7M3 4v5h5m4-2v5l3 2',download:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',ticket:'M15 5H9a2 2 0 0 0-2 2v2a2 2 0 0 1 0 4v2a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2z'};
-export function Icon({name,size=20,...props}:{name:IconName;size?:number}&SVGProps<SVGSVGElement>){return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}><path d={paths[name]}/></svg>}
+export type IconName = 'home' | 'bids' | 'wallet' | 'user' | 'bell' | 'menu' | 'search' | 'filter' | 'chevron' | 'chevron-right' | 'chevron-down' | 'back' | 'clock' | 'plus' | 'eye' | 'sliders' | 'arrow' | 'card' | 'help' | 'settings' | 'history' | 'download' | 'ticket';
+const paths: Record<IconName, string> = {
+  home: 'M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5v-9ZM9 21v-6h6v6',
+  bids: 'M7 3h10v18H7zM9.5 8h5m-5 4h5m-5 4h3',
+  wallet: 'M4 7h15a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h12M16 14h5m-2.5-2.5v5',
+  user: 'M20 21a8 8 0 0 0-16 0M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9',
+  bell: 'M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',
+  menu: 'M4 7h16M4 12h16M4 17h16',
+  search: 'm21 21-4.2-4.2M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
+  filter: 'M4 6h16M7 12h10M10 18h4',
+  chevron: 'm9 18 6-6-6-6',
+  'chevron-right': 'm9 18 6-6-6-6',
+  'chevron-down': 'm6 9 6 6 6-6',
+  back: 'M19 12H5m7-7-7 7 7 7',
+  clock: 'M12 7v5l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
+  plus: 'M12 5v14M5 12h14',
+  eye: 'M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
+  sliders: 'M4 7h16M4 17h16M8 7v4m8 6v4',
+  arrow: 'M5 12h14m-5-5 5 5-5 5',
+  card: 'M3 6h18v12H3zM3 10h18M7 16h3',
+  help: 'M9.1 9a3 3 0 1 1 5.8 1c0 2-2.9 2-2.9 4m.05 4h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+  settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm0-13v3m0 13v3m9.5-9.5h-3m-13 0h-3m16.2-6.7-2.1 2.1M7.4 16.6l-2.1 2.1m0-13.4 2.1 2.1m9.2 9.2 2.1 2.1',
+  history: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5m4-2v5l3 2',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  ticket: 'M15 5H9a2 2 0 0 0-2 2v2a2 2 0 0 1 0 4v2a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2z',
+};
+export function Icon({ name, size = 20, ...props }: { name: IconName; size?: number } & SVGProps<SVGSVGElement>) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}><path d={paths[name]} /></svg>;
+}

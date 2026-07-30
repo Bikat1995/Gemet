@@ -2,15 +2,35 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '../components/Icons';
 
+const api = 'https://gemet-api.onrender.com';
+
 type Stats = { users: number; liveAuctions: number; totalDeposits: string; totalBids: number };
-type User = { id: string; username: string; phoneNumber: string; walletBalance: number; createdAt: string; };
-type Auction = { id: string; title: string; entryFee: string; status: string; };
-type Winner = { auctionId: string; title: string; description?: string; category?: string; username: string; phoneNumber: string; winningBidAmount: string; date: string; };
-type PendingPayment = { id: string; username: string; phoneNumber: string | null; auctionTitle: string; entryFee: string; paymentMethod: string | null; txId: string | null; createdAt: string; };
+type User = { id: string; username: string; phoneNumber: string; walletBalance: number; createdAt: string };
+type Auction = { id: string; title: string; entryFee: string; status: string };
+type Winner = { auctionId: string; title: string; description?: string; category?: string; username: string; phoneNumber: string; winningBidAmount: string; date: string };
+type PendingPayment = { id: string; username: string; phoneNumber: string | null; auctionTitle: string; entryFee: string; paymentMethod: string | null; txId: string | null; createdAt: string };
+
+type Tab = 'overview' | 'payments' | 'auctions' | 'users' | 'winners';
+
+function StatCard({ label, value, color, icon }: { label: string; value: string | number; color: string; icon: string }) {
+  return (
+    <div className={`relative overflow-hidden rounded-2xl p-5 border ${color}`}>
+      <div className="flex justify-between items-start">
+        <div>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+          <p className="text-3xl font-black text-white">{value}</p>
+        </div>
+        <span className="text-2xl">{icon}</span>
+      </div>
+      <div className="absolute bottom-0 right-0 w-20 h-20 rounded-full opacity-5 bg-white translate-x-6 translate-y-6" />
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const [pass, setPass] = useState('');
   const [auth, setAuth] = useState(false);
+  const [tab, setTab] = useState<Tab>('overview');
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [auctions, setAuctions] = useState<Auction[]>([]);
@@ -18,8 +38,6 @@ export default function AdminDashboard() {
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
-  
-  // New Auction Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -27,8 +45,6 @@ export default function AdminDashboard() {
   const [entryFee, setEntryFee] = useState('');
   const [endTime, setEndTime] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const api = 'https://gemet-api.onrender.com';
 
   const fetchAll = async () => {
     const [sRes, uRes, aRes, wRes, pRes] = await Promise.all([
@@ -38,29 +54,21 @@ export default function AdminDashboard() {
       fetch(`${api}/admin/winners`),
       fetch(`${api}/admin/payments/pending`),
     ]);
-    if(sRes.ok) setStats(await sRes.json());
-    if(uRes.ok) setUsers((await uRes.json()).users);
-    if(aRes.ok) setAuctions((await aRes.json()).auctions);
-    if(wRes.ok) setWinners((await wRes.json()).winners);
-    if(pRes.ok) setPendingPayments((await pRes.json()).payments);
+    if (sRes.ok) setStats(await sRes.json());
+    if (uRes.ok) setUsers((await uRes.json()).users);
+    if (aRes.ok) setAuctions((await aRes.json()).auctions);
+    if (wRes.ok) setWinners((await wRes.json()).winners);
+    if (pRes.ok) setPendingPayments((await pRes.json()).payments);
   };
 
-  useEffect(() => {
-    if (!auth) return;
-    fetchAll();
-  }, [auth]);
+  useEffect(() => { if (auth) fetchAll(); }, [auth]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Image is too large (max 2MB)");
-      return;
-    }
+    if (file.size > 2 * 1024 * 1024) { alert('Image too large (max 2MB)'); return; }
     const reader = new FileReader();
-    reader.onload = (event) => {
-      setImageUrl(event.target?.result as string);
-    };
+    reader.onload = ev => setImageUrl(ev.target?.result as string);
     reader.readAsDataURL(file);
   };
 
@@ -71,403 +79,415 @@ export default function AdminDashboard() {
       const res = await fetch(`${api}/admin/auctions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title, description, imageUrl, category, entryFee: Number(entryFee),
-          endTime: new Date(endTime).toISOString()
-        })
+        body: JSON.stringify({ title, description, imageUrl, category, entryFee: Number(entryFee), endTime: new Date(endTime).toISOString() })
       });
       if (res.ok) {
         setShowModal(false);
-        fetchAll(); // Refresh the list
-        // Reset form
+        fetchAll();
         setTitle(''); setDescription(''); setImageUrl(''); setEntryFee(''); setEndTime('');
       } else {
-        const errorText = await res.text();
-        console.error("Backend Error:", errorText);
-        alert(`Failed to create auction. Server response: ${errorText}`);
+        alert(`Failed: ${await res.text()}`);
       }
-    } catch (err) {
-      console.error("Network Error:", err);
-      alert(`Error creating auction: ${(err as Error).message}`);
-    }
+    } catch (err) { alert(`Error: ${(err as Error).message}`); }
     setSubmitting(false);
   };
 
   const handleDeleteAuction = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this auction?')) return;
-    try {
-      const res = await fetch(`${api}/admin/auctions/${id}`, { method: 'DELETE' });
-      if (res.ok) fetchAll();
-      else alert('Failed to delete auction');
-    } catch (err) {
-      alert(`Error: ${(err as Error).message}`);
-    }
+    if (!confirm('Delete this auction?')) return;
+    const res = await fetch(`${api}/admin/auctions/${id}`, { method: 'DELETE' });
+    if (res.ok) fetchAll(); else alert('Failed to delete');
   };
 
-  const handleVerifyPayment = async (id: string, status: 'success' | 'failed') => {
+  const handleVerify = async (id: string, status: 'success' | 'failed') => {
     setVerifyingId(id);
-    try {
-      const res = await fetch(`${api}/admin/payments/${id}/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      if (res.ok) fetchAll();
-      else alert('Verification failed');
-    } catch (err) {
-      alert(`Error: ${(err as Error).message}`);
-    }
+    const res = await fetch(`${api}/admin/payments/${id}/verify`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    if (res.ok) fetchAll(); else alert('Verification failed');
     setVerifyingId(null);
   };
 
-  const exportCsv = (data: any[], filename: string) => {
-    if (!data.length) return alert("No data to export");
-    const headers = Object.keys(data[0]);
-    const csvContent = [
-      headers.join(','),
-      ...data.map(row => headers.map(h => `"${String(row[h]).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleReset = async () => {
+    const secret = prompt('⚠️ DANGER: Enter secret key to wipe ALL data:');
+    if (!secret) return;
+    const res = await fetch(`${api}/admin/reset-all`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret })
+    });
+    if (res.ok) { alert('Database wiped!'); window.location.reload(); }
+    else alert('Failed. Wrong secret?');
   };
+
+  const exportCsv = (data: any[], filename: string) => {
+    if (!data.length) return alert('No data');
+    const headers = Object.keys(data[0]);
+    const csv = [headers.join(','), ...data.map(r => headers.map(h => `"${String(r[h]).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    link.download = filename;
+    link.click();
+  };
+
+  const tabs: { id: Tab; label: string; badge?: number }[] = [
+    { id: 'overview', label: '📊 Overview' },
+    { id: 'payments', label: '⏳ Payments', badge: pendingPayments.length },
+    { id: 'auctions', label: '🏷 Auctions' },
+    { id: 'users', label: '👤 Users' },
+    { id: 'winners', label: '🏆 Winners' },
+  ];
 
   if (!auth) {
     return (
-      <main className="min-h-screen bg-[#0A0D14] flex items-center justify-center p-4">
-        <div className="bg-[#141923] p-8 rounded-2xl border border-white/10 w-full max-w-sm">
-          <h1 className="text-xl font-bold text-white mb-4">Admin Login</h1>
-          <input 
-            type="password" 
-            placeholder="Enter Admin Password" 
-            className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white mb-4 outline-none focus:border-cyan-500"
-            value={pass}
-            onChange={e => setPass(e.target.value)}
-          />
-          <button 
-            onClick={() => { if (pass === 'admin123') setAuth(true); else alert('Incorrect Password'); }}
-            className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded-lg"
-          >
-            Login
-          </button>
+      <main className="min-h-screen bg-[#07090F] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-3xl mb-4">🔐</div>
+            <h1 className="text-2xl font-black text-white">Gemet Admin</h1>
+            <p className="text-sm text-slate-400 mt-1">Restricted access only</p>
+          </div>
+          <div className="bg-[#111827] rounded-2xl border border-white/5 p-6">
+            <input
+              type="password"
+              placeholder="Admin password"
+              className="w-full bg-[#0A0D14] border border-white/10 rounded-xl p-3 text-white mb-4 outline-none focus:border-cyan-500 text-sm"
+              value={pass}
+              onChange={e => setPass(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && (pass === 'admin123' ? setAuth(true) : alert('Incorrect'))}
+            />
+            <button
+              onClick={() => { if (pass === 'admin123') setAuth(true); else alert('Incorrect Password'); }}
+              className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold py-3 rounded-xl text-sm"
+            >
+              Unlock Dashboard
+            </button>
+          </div>
         </div>
       </main>
     );
   }
 
-  const handleResetData = async () => {
-    const secret = prompt('DANGER: This will wipe all users, auctions, bids, and winners. Enter secret key to confirm:');
-    if (!secret) return;
-    try {
-      const res = await fetch(`${api}/admin/reset-all`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ secret })
-      });
-      if (res.ok) {
-        alert('Database wiped successfully! Restarting...');
-        window.location.reload();
-      } else {
-        alert('Failed to reset data. Incorrect secret?');
-      }
-    } catch (err) {
-      alert(`Error: ${(err as Error).message}`);
-    }
-  };
-
   return (
-    <main className="min-h-screen bg-[#0A0D14] text-white p-4 md:p-8 font-sans">
-      <div className="max-w-6xl mx-auto">
-        <header className="flex justify-between items-center mb-8 bg-[#141923] p-4 rounded-2xl border border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="bg-cyan-500/20 p-2 rounded-xl text-cyan-400">
-              <Icon name="sliders" size={24} />
-            </div>
-            <div>
-              <h1 className="text-xl font-extrabold text-white">Gemet Admin</h1>
-              <p className="text-xs text-slate-400">Management Dashboard</p>
-            </div>
+    <main className="min-h-screen bg-[#07090F] text-white font-sans">
+      {/* Sidebar header */}
+      <div className="sticky top-0 z-40 bg-[#07090F]/90 backdrop-blur-xl border-b border-white/5 px-4 md:px-8 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-cyan-500 grid place-items-center text-[#0A0D14] font-black text-sm">G</div>
+          <div>
+            <h1 className="text-sm font-extrabold text-white leading-tight">Gemet Admin</h1>
+            <p className="text-[10px] text-slate-500">Management Console</p>
           </div>
-          <div className="flex items-center gap-3">
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={handleReset} className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold hover:bg-red-500/20 transition-colors">⚠️ Reset</button>
+          <button onClick={() => setShowModal(true)} className="px-3 py-1.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg text-xs font-bold hover:bg-cyan-500/20 transition-colors">+ New Auction</button>
+          <button onClick={() => setAuth(false)} className="px-3 py-1.5 bg-white/5 text-slate-400 rounded-lg text-xs font-bold hover:bg-white/10 transition-colors">Logout</button>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
+        {/* Tabs */}
+        <div className="flex gap-1 bg-[#111827] rounded-xl p-1 mb-6 overflow-x-auto">
+          {tabs.map(t => (
             <button
-              onClick={handleResetData}
-              className="px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded-xl text-sm font-bold hover:bg-red-500/20 transition-colors"
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`relative flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${tab === t.id ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`}
             >
-              Reset Database
+              {t.label}
+              {t.badge ? (
+                <span className="h-4 min-w-4 px-1 rounded-full bg-amber-500 text-[#0A0D14] text-[9px] font-black grid place-items-center">{t.badge}</span>
+              ) : null}
             </button>
-            <button onClick={() => setAuth(false)} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-colors">
-              Logout
-            </button>
-          </div>
-        </header>
+          ))}
+        </div>
 
-        <button 
-          onClick={() => setShowModal(true)}
-          className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 px-4 rounded-lg flex items-center gap-2 mb-8"
-        >
-          <Icon name="plus" size={16} /> Create Auction
-        </button>
+        {/* Overview Tab */}
+        {tab === 'overview' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard label="Total Users" value={stats?.users ?? '…'} color="border-cyan-500/20 bg-cyan-500/5" icon="👥" />
+              <StatCard label="Live Auctions" value={stats?.liveAuctions ?? '…'} color="border-emerald-500/20 bg-emerald-500/5" icon="🔴" />
+              <StatCard label="Revenue (ETB)" value={stats?.totalDeposits ?? '…'} color="border-amber-500/20 bg-amber-500/5" icon="💰" />
+              <StatCard label="Total Bids" value={stats?.totalBids ?? '…'} color="border-violet-500/20 bg-violet-500/5" icon="🎯" />
+            </div>
 
-      {!stats ? <p>Loading data...</p> : (
-        <>
-          <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-[#141923] p-5 rounded-2xl border border-white/5">
-              <p className="text-sm text-slate-400 mb-1">Total Users</p>
-              <h2 className="text-3xl font-bold">{stats.users}</h2>
-            </div>
-            <div className="bg-[#141923] p-5 rounded-2xl border border-white/5">
-              <p className="text-sm text-slate-400 mb-1">Live Auctions</p>
-              <h2 className="text-3xl font-bold">{stats.liveAuctions}</h2>
-            </div>
-            <div className="bg-[#141923] p-5 rounded-2xl border border-white/5">
-              <p className="text-sm text-slate-400 mb-1">Total Deposits (ETB)</p>
-              <h2 className="text-3xl font-bold text-emerald-400">{stats.totalDeposits}</h2>
-            </div>
-            <div className="bg-[#141923] p-5 rounded-2xl border border-white/5">
-              <p className="text-sm text-slate-400 mb-1">Total Bids Placed</p>
-              <h2 className="text-3xl font-bold text-cyan-400">{stats.totalBids}</h2>
-            </div>
-          </section>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <section className="bg-[#141923] p-6 rounded-2xl border border-white/5 overflow-hidden">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold">Recent Users</h3>
-                <button onClick={() => exportCsv(users, 'users.csv')} className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
-                  <Icon name="download" size={14} /> Export CSV
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
-                    <tr>
-                      <th className="px-4 py-3 rounded-tl-lg">User</th>
-                      <th className="px-4 py-3">Phone</th>
-                      <th className="px-4 py-3 rounded-tr-lg">Joined</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map(u => (
-                      <tr key={u.id} className="border-b border-white/5">
-                        <td className="px-4 py-3 font-medium text-white">{u.username || 'Anonymous'}</td>
-                        <td className="px-4 py-3 text-cyan-300">{u.phoneNumber || 'Not provided'}</td>
-                        <td className="px-4 py-3 text-slate-400">{new Date(u.createdAt).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="bg-[#141923] p-6 rounded-2xl border border-white/5 overflow-hidden">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold">System Auctions</h3>
-                <button onClick={() => exportCsv(auctions, 'auctions.csv')} className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
-                  <Icon name="download" size={14} /> Export CSV
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
-                    <tr>
-                      <th className="px-4 py-3 rounded-tl-lg">Title</th>
-                      <th className="px-4 py-3">Entry Fee</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 rounded-tr-lg">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auctions.map(a => (
-                      <tr key={a.id} className="border-b border-white/5">
-                        <td className="px-4 py-3 font-medium text-white">{a.title}</td>
-                        <td className="px-4 py-3 text-cyan-300 font-mono">{a.entryFee} ETB</td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${a.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : a.status === 'ended' ? 'bg-amber-500/10 text-amber-400' : 'bg-slate-500/10 text-slate-400'}`}>
-                            {a.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => handleDeleteAuction(a.id)} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-1.5 rounded-lg">Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </div>
-
-          <section className="bg-[#141923] p-6 rounded-2xl border border-white/5 overflow-hidden">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Auction Winners</h3>
-              <button onClick={() => exportCsv(winners, 'winners.csv')} className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
-                <Icon name="download" size={14} /> Export CSV
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
-                  <tr>
-                    <th className="px-4 py-3 rounded-tl-lg">Auction</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Winner</th>
-                    <th className="px-4 py-3">Phone</th>
-                    <th className="px-4 py-3">Winning Bid</th>
-                    <th className="px-4 py-3 rounded-tr-lg">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {winners.length === 0 ? (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No winners yet</td></tr>
-                  ) : winners.map(w => (
-                    <tr key={w.auctionId} className="border-b border-white/5">
-                      <td className="px-4 py-3 font-medium text-white max-w-[120px]"><div className="truncate">{w.title}</div></td>
-                      <td className="px-4 py-3 text-slate-400 text-xs max-w-[150px]"><div className="truncate">{w.description || '—'}</div></td>
-                      <td className="px-4 py-3 text-white">{w.username}</td>
-                      <td className="px-4 py-3 text-cyan-300">{w.phoneNumber}</td>
-                      <td className="px-4 py-3 text-emerald-400 font-mono">{w.winningBidAmount} ETB</td>
-                      <td className="px-4 py-3 text-slate-400">{new Date(w.date).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          {/* ── Pending Payments ── */}
-          <section className="bg-[#141923] p-6 rounded-2xl border border-amber-500/20 overflow-hidden mt-0">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg" style={{ background: 'rgba(251,191,36,0.1)' }}>
-                <span className="text-amber-400 text-base">⏳</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold">Pending Payment Verifications</h3>
-                <p className="text-xs text-slate-500">Approve or reject user-submitted transaction IDs</p>
-              </div>
-              <span className="ml-auto text-xs font-bold rounded-full px-3 py-1" style={{ background: pendingPayments.length > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.05)', color: pendingPayments.length > 0 ? '#fbbf24' : '#64748b' }}>
-                {pendingPayments.length} pending
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
-                  <tr>
-                    <th className="px-4 py-3 rounded-tl-lg">User</th>
-                    <th className="px-4 py-3">Phone</th>
-                    <th className="px-4 py-3">Auction</th>
-                    <th className="px-4 py-3">Method</th>
-                    <th className="px-4 py-3">Transaction ID</th>
-                    <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3 rounded-tr-lg">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingPayments.length === 0 ? (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No pending verifications 🎉</td></tr>
-                  ) : pendingPayments.map(p => (
-                    <tr key={p.id} className="border-b border-white/5">
-                      <td className="px-4 py-3 font-medium text-white">{p.username}</td>
-                      <td className="px-4 py-3 text-cyan-300 text-xs">{p.phoneNumber || '—'}</td>
-                      <td className="px-4 py-3 text-slate-300 max-w-[140px] truncate">{p.auctionTitle}</td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs px-2 py-1 rounded font-semibold" style={{ background: p.paymentMethod?.includes('telebirr') ? 'rgba(0,173,239,0.1)' : 'rgba(247,148,29,0.1)', color: p.paymentMethod?.includes('telebirr') ? '#00ADEF' : '#F7941D' }}>
-                          {p.paymentMethod?.replace('_', ' ') ?? '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-amber-300 text-xs">{p.txId ?? '—'}</td>
-                      <td className="px-4 py-3 text-emerald-400 font-mono text-xs">{p.entryFee} ETB</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleVerifyPayment(p.id, 'success')}
-                            disabled={verifyingId === p.id}
-                            className="text-xs bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50"
-                          >
-                            ✓ Approve
-                          </button>
-                          <button
-                            onClick={() => handleVerifyPayment(p.id, 'failed')}
-                            disabled={verifyingId === p.id}
-                            className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50"
-                          >
-                            ✕ Reject
-                          </button>
+            {/* Bento grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Pending Payments - large card */}
+              <div className="md:col-span-2 bg-[#111827] rounded-2xl border border-amber-500/20 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="h-8 w-8 grid place-items-center rounded-lg bg-amber-500/10 text-amber-400 text-base">⏳</span>
+                    <h3 className="font-bold text-sm">Pending Verifications</h3>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${pendingPayments.length > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-500'}`}>
+                    {pendingPayments.length} pending
+                  </span>
+                </div>
+                {pendingPayments.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-sm">🎉 All payments verified!</div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingPayments.slice(0, 5).map(p => (
+                      <div key={p.id} className="bg-[#0A0D14] rounded-xl p-3 flex flex-col gap-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white">{p.auctionTitle}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">{p.phoneNumber || p.username}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-[11px] font-bold text-emerald-400">{p.entryFee} ETB</p>
+                            <p className="text-[10px] text-amber-300 font-mono">{p.txId?.slice(0, 12)}…</p>
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
-      )}
+                        <div className="flex gap-2">
+                          <button onClick={() => handleVerify(p.id, 'success')} disabled={verifyingId === p.id} className="flex-1 text-[11px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 py-1.5 rounded-lg font-bold disabled:opacity-50">✓ Approve</button>
+                          <button onClick={() => handleVerify(p.id, 'failed')} disabled={verifyingId === p.id} className="flex-1 text-[11px] bg-red-500/20 text-red-400 hover:bg-red-500/30 py-1.5 rounded-lg font-bold disabled:opacity-50">✕ Reject</button>
+                        </div>
+                      </div>
+                    ))}
+                    {pendingPayments.length > 5 && (
+                      <button onClick={() => setTab('payments')} className="w-full text-xs text-cyan-400 text-center py-2">View all {pendingPayments.length} →</button>
+                    )}
+                  </div>
+                )}
+              </div>
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-[#141923] border border-white/10 rounded-2xl p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Create New Auction</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">✕</button>
+              {/* Recent Winners */}
+              <div className="bg-[#111827] rounded-2xl border border-white/5 p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="h-8 w-8 grid place-items-center rounded-lg bg-amber-500/10 text-amber-400 text-base">🏆</span>
+                  <h3 className="font-bold text-sm">Recent Winners</h3>
+                </div>
+                {winners.length === 0 ? (
+                  <p className="text-center text-slate-500 text-xs py-8">No winners yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {winners.slice(0, 4).map(w => (
+                      <div key={w.auctionId} className="bg-[#0A0D14] rounded-xl p-3">
+                        <p className="text-xs font-bold text-white truncate">{w.title}</p>
+                        <div className="flex justify-between mt-1">
+                          <p className="text-[10px] text-slate-400 font-mono">{w.phoneNumber}</p>
+                          <p className="text-[10px] text-emerald-400 font-bold">{w.winningBidAmount} ETB</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            
+
+            {/* Live Auctions mini grid */}
+            <div className="bg-[#111827] rounded-2xl border border-white/5 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="h-8 w-8 grid place-items-center rounded-lg bg-emerald-500/10 text-emerald-400 text-base">🔴</span>
+                  <h3 className="font-bold text-sm">Live Auctions</h3>
+                </div>
+                <button onClick={() => setTab('auctions')} className="text-xs text-cyan-400">View all →</button>
+              </div>
+              {auctions.filter(a => a.status === 'active').length === 0 ? (
+                <p className="text-slate-500 text-xs text-center py-4">No live auctions</p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {auctions.filter(a => a.status === 'active').slice(0, 6).map(a => (
+                    <div key={a.id} className="bg-[#0A0D14] rounded-xl p-3 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white truncate">{a.title}</p>
+                        <p className="text-[10px] text-cyan-400">{a.entryFee} ETB</p>
+                      </div>
+                      <button onClick={() => handleDeleteAuction(a.id)} className="shrink-0 text-[10px] bg-red-500/20 text-red-400 px-2 py-1 rounded-lg">Del</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Payments Tab */}
+        {tab === 'payments' && (
+          <div className="bg-[#111827] rounded-2xl border border-amber-500/20 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">Payment Verifications</h3>
+              <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${pendingPayments.length > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400'}`}>{pendingPayments.length} pending</span>
+            </div>
+            {pendingPayments.length === 0 ? (
+              <p className="text-center py-12 text-slate-400">🎉 No pending verifications</p>
+            ) : (
+              <div className="space-y-3">
+                {pendingPayments.map(p => (
+                  <div key={p.id} className="bg-[#0A0D14] rounded-xl p-4 flex flex-col md:flex-row gap-3 items-start md:items-center">
+                    <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <div>
+                        <p className="text-[10px] text-slate-500">User</p>
+                        <p className="text-xs font-bold text-white">{p.username}</p>
+                        <p className="text-[10px] text-cyan-400 font-mono">{p.phoneNumber || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500">Auction</p>
+                        <p className="text-xs text-white truncate">{p.auctionTitle}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500">Method / Tx ID</p>
+                        <p className="text-[11px] text-amber-300 font-bold">{p.paymentMethod}</p>
+                        <p className="text-[10px] text-slate-400 font-mono truncate">{p.txId}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500">Amount</p>
+                        <p className="text-sm font-black text-emerald-400">{p.entryFee} ETB</p>
+                        <p className="text-[10px] text-slate-500">{new Date(p.createdAt).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => handleVerify(p.id, 'success')} disabled={verifyingId === p.id} className="text-xs bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-4 py-2 rounded-xl font-bold disabled:opacity-50">✓ Approve</button>
+                      <button onClick={() => handleVerify(p.id, 'failed')} disabled={verifyingId === p.id} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-4 py-2 rounded-xl font-bold disabled:opacity-50">✕ Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Auctions Tab */}
+        {tab === 'auctions' && (
+          <div className="bg-[#111827] rounded-2xl border border-white/5 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">All Auctions</h3>
+              <div className="flex gap-2">
+                <button onClick={() => exportCsv(auctions, 'auctions.csv')} className="text-xs bg-white/10 px-3 py-1.5 rounded-lg text-slate-300">⬇ CSV</button>
+                <button onClick={() => setShowModal(true)} className="text-xs bg-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-lg font-bold">+ New</button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {auctions.map(a => (
+                <div key={a.id} className="bg-[#0A0D14] rounded-xl p-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{a.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${a.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'}`}>{a.status}</span>
+                      <span className="text-[10px] text-cyan-400">{a.entryFee} ETB</span>
+                    </div>
+                  </div>
+                  <button onClick={() => handleDeleteAuction(a.id)} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-1.5 rounded-lg font-bold">Delete</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Users Tab */}
+        {tab === 'users' && (
+          <div className="bg-[#111827] rounded-2xl border border-white/5 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">All Users ({users.length})</h3>
+              <button onClick={() => exportCsv(users, 'users.csv')} className="text-xs bg-white/10 px-3 py-1.5 rounded-lg text-slate-300">⬇ CSV</button>
+            </div>
+            <div className="space-y-2">
+              {users.map(u => (
+                <div key={u.id} className="bg-[#0A0D14] rounded-xl p-3 flex items-center gap-3">
+                  <div className="h-8 w-8 grid place-items-center rounded-full bg-cyan-500/20 text-cyan-400 font-black text-xs shrink-0">
+                    {(u.username || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-white">{u.username || 'Anonymous'}</p>
+                    <p className="text-[10px] text-cyan-400 font-mono">{u.phoneNumber || 'No phone'}</p>
+                  </div>
+                  <p className="text-[10px] text-slate-500">{new Date(u.createdAt).toLocaleDateString()}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Winners Tab */}
+        {tab === 'winners' && (
+          <div className="bg-[#111827] rounded-2xl border border-white/5 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">Auction Winners</h3>
+              <button onClick={() => exportCsv(winners, 'winners.csv')} className="text-xs bg-white/10 px-3 py-1.5 rounded-lg text-slate-300">⬇ CSV</button>
+            </div>
+            {winners.length === 0 ? (
+              <p className="text-center text-slate-400 py-10">No winners declared yet</p>
+            ) : (
+              <div className="space-y-3">
+                {winners.map(w => (
+                  <div key={w.auctionId} className="bg-[#0A0D14] rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <p className="text-sm font-bold text-white">{w.title}</p>
+                        <p className="text-[10px] text-slate-400">{w.description || '—'}</p>
+                      </div>
+                      <span className="text-[11px] font-black text-emerald-400 shrink-0">{w.winningBidAmount} ETB</span>
+                    </div>
+                    <div className="flex items-center gap-3 border-t border-white/5 pt-2">
+                      <span className="text-base">🏆</span>
+                      <div>
+                        <p className="text-[10px] text-slate-500">Winner</p>
+                        <p className="text-xs font-bold text-white font-mono">{w.phoneNumber}</p>
+                      </div>
+                      <p className="ml-auto text-[10px] text-slate-500">{new Date(w.date).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Create Auction Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
+          <div className="bg-[#111827] border border-white/10 rounded-2xl p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-bold">Create New Auction</h2>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white text-xl">✕</button>
+            </div>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Title</label>
-                <input required type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="e.g. iPhone 15 Pro Max" />
+                <label className="block text-xs text-slate-400 mb-1">Title</label>
+                <input required type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-[#0A0D14] border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-cyan-500" placeholder="e.g. iPhone 15 Pro Max" />
               </div>
-              
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Description</label>
-                <textarea required rows={3} value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="A brief description of the item" />
+                <label className="block text-xs text-slate-400 mb-1">Description</label>
+                <textarea required rows={3} value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-[#0A0D14] border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-cyan-500" placeholder="Brief description of the item" />
               </div>
-              
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-400 mb-1">Item Image</label>
-                  <div className="flex items-center gap-4">
-                    {imageUrl && <img src={imageUrl} alt="Preview" className="h-12 w-12 object-cover rounded-lg border border-white/10" />}
-                    <input required={!imageUrl} type="file" accept="image/*" onChange={handleImageUpload} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-2 text-sm text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-cyan-500/20 file:text-cyan-400 hover:file:bg-cyan-500/30" />
-                  </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Item Image</label>
+                <div className="flex items-center gap-3">
+                  {imageUrl && <img src={imageUrl} alt="" className="h-12 w-12 object-cover rounded-lg border border-white/10" />}
+                  <input required={!imageUrl} type="file" accept="image/*" onChange={handleImageUpload} className="w-full bg-[#0A0D14] border border-white/10 rounded-xl p-2 text-xs text-slate-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-cyan-500/20 file:text-cyan-400" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">Category</label>
-                  <select value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500">
+                  <label className="block text-xs text-slate-400 mb-1">Category</label>
+                  <select value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-[#0A0D14] border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-cyan-500">
                     <option value="electronics">Electronics</option>
                     <option value="vehicles">Vehicles</option>
                     <option value="property">Property</option>
                     <option value="other">Other</option>
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">Entry Fee (ETB)</label>
-                <input required type="number" min="1" step="0.01" value={entryFee} onChange={e => setEntryFee(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" placeholder="e.g. 30" />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">End Time (Local)</label>
-                  <input required type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-[#0E131D] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-cyan-500" />
+                  <label className="block text-xs text-slate-400 mb-1">Entry Fee (ETB)</label>
+                  <input required type="number" min="1" step="0.01" value={entryFee} onChange={e => setEntryFee(e.target.value)} className="w-full bg-[#0A0D14] border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-cyan-500" placeholder="e.g. 30" />
                 </div>
               </div>
-
-              <button disabled={submitting} type="submit" className="w-full mt-4 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-900 font-bold py-3 rounded-lg flex items-center justify-center gap-2">
-                {submitting ? 'Creating...' : 'Create Auction'}
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">End Time (Local)</label>
+                <input required type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-[#0A0D14] border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-cyan-500" />
+              </div>
+              <button disabled={submitting} type="submit" className="w-full mt-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm">
+                {submitting ? 'Creating…' : '🚀 Create Auction'}
               </button>
             </form>
           </div>
         </div>
       )}
-      </div>
     </main>
   );
 }

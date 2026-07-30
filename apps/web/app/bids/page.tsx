@@ -5,112 +5,180 @@ import { useLanguage } from '../components/LanguageProvider';
 import { Icon } from '../components/Icons';
 import { useTelegram } from '../components/TelegramProvider';
 
-type Bid = {
+const api = 'https://gemet-api.onrender.com';
+
+type Auction = {
   id: string;
-  amount: string | null;
-  paymentStatus: string;
-  ticketNumber: string;
+  title: string;
+  imageUrl: string;
   status: string;
-  date: string;
-  auction: { title: string; status: string; imageUrl: string };
+  entryFee: string;
+  endTime: string;
+  category: string;
 };
 
-function statusBadge(b: Bid) {
-  if (b.paymentStatus === 'verifying') return { label: 'Verifying', color: 'text-yellow-300 bg-yellow-500/10' };
-  if (b.paymentStatus === 'pending') return { label: 'Pending Payment', color: 'text-orange-300 bg-orange-500/10' };
-  if (b.status === 'unique') return { label: 'Unique ✓', color: 'text-emerald-300 bg-emerald-500/10' };
-  if (b.status === 'duplicated') return { label: 'Duplicated', color: 'text-red-300 bg-red-500/10' };
-  return { label: b.status, color: 'text-slate-300 bg-white/5' };
-}
+type Bidder = {
+  id: string;
+  phone: string;
+  date: string;
+};
+
+type LeaderboardData = {
+  totalBids: number;
+  bidders: Bidder[];
+};
 
 export default function Bids() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const tg = useTelegram();
-  const [tab, setTab] = useState<'active' | 'history'>('active');
-  const [bids, setBids] = useState<Bid[]>([]);
+  const [auctions, setAuctions] = useState<Auction[]>([]);
+  const [selected, setSelected] = useState<Auction | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [lbLoading, setLbLoading] = useState(false);
 
   useEffect(() => {
-    if (!tg.token) return;
-    fetch(`${'https://gemet-api.onrender.com'}/bids/history`, {
-      headers: { authorization: `Bearer ${tg.token}` }
-    })
+    setLoading(true);
+    fetch(`${api}/auctions`)
       .then(r => r.ok ? r.json() : null)
-      .then(x => x?.bids && setBids(x.bids))
-      .catch(() => {});
-  }, [tg.token]);
+      .then(x => x?.auctions && setAuctions(x.auctions))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-  const active = bids.filter(b =>
-    b.auction.status === 'active' || b.paymentStatus === 'verifying' || b.paymentStatus === 'pending'
-  );
-  const history = bids.filter(b =>
-    b.auction.status !== 'active' && b.paymentStatus !== 'verifying' && b.paymentStatus !== 'pending'
-  );
-  const visible = tab === 'active' ? active : history;
+  const openLeaderboard = async (auction: Auction) => {
+    setSelected(auction);
+    setLbLoading(true);
+    setLeaderboard(null);
+    try {
+      const r = await fetch(`${api}/auctions/${auction.id}/bidders`);
+      if (r.ok) setLeaderboard(await r.json());
+    } catch (_) {}
+    setLbLoading(false);
+  };
+
+  const timeLeft = (endTime: string) => {
+    const diff = new Date(endTime).getTime() - Date.now();
+    if (diff <= 0) return lang === 'am' ? 'ጨረታ አብቅቷል' : 'Ended';
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    if (h > 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
+    return `${h}h ${m}m`;
+  };
+
+  const catColor = (c: string) => {
+    const map: Record<string, string> = { electronics: 'text-cyan-400 bg-cyan-400/10', vehicles: 'text-emerald-400 bg-emerald-400/10', property: 'text-violet-400 bg-violet-400/10', other: 'text-amber-400 bg-amber-400/10' };
+    return map[c?.toLowerCase()] ?? 'text-slate-400 bg-slate-400/10';
+  };
+
+  // Leaderboard modal
+  if (selected) {
+    return (
+      <main className="app-shell mx-auto min-h-screen max-w-md px-4 pb-28 pt-5">
+        <header className="flex items-center gap-3 mb-6">
+          <button onClick={() => { setSelected(null); setLeaderboard(null); }} className="tile h-9 w-9 grid place-items-center rounded-xl text-cyan-300">
+            <Icon name="back" size={18} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">{t.leaderboard}</p>
+            <h1 className="text-lg font-extrabold truncate">{selected.title}</h1>
+          </div>
+        </header>
+
+        <div className="tile rounded-2xl p-5 mb-4 flex items-center justify-between border border-white/[.06]">
+          <div>
+            <p className="text-[11px] text-slate-400">{t.totalBids}</p>
+            <p className="text-4xl font-black text-cyan-300">{lbLoading ? '…' : (leaderboard?.totalBids ?? 0)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] text-slate-400">{lang === 'am' ? 'ቀሪ ጊዜ' : 'Time left'}</p>
+            <p className="text-xl font-bold text-amber-300">{timeLeft(selected.endTime)}</p>
+          </div>
+        </div>
+
+        <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-3">{t.bidders}</h2>
+
+        {lbLoading ? (
+          <div className="flex flex-col gap-2">
+            {[1, 2, 3].map(i => <div key={i} className="tile rounded-xl h-12 animate-pulse" />)}
+          </div>
+        ) : !leaderboard || leaderboard.bidders.length === 0 ? (
+          <div className="tile rounded-2xl p-8 text-center">
+            <span className="grid mx-auto h-14 w-14 place-items-center rounded-2xl border border-cyan-400/20 bg-cyan-400/5 text-cyan-300 mb-3">
+              <Icon name="bids" size={26} />
+            </span>
+            <p className="text-sm text-slate-400">{t.noBidders}</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {leaderboard.bidders.map((b, i) => (
+              <div key={b.id} className="tile flex items-center gap-4 rounded-xl px-4 py-3 border border-white/[.04]">
+                <span className={`text-sm font-black w-6 text-center ${i === 0 ? 'text-amber-300' : 'text-slate-500'}`}>
+                  {i + 1}
+                </span>
+                <div className="flex-1">
+                  <p className="font-mono text-sm text-white font-bold">{b.phone}</p>
+                  <p className="text-[10px] text-slate-500">{new Date(b.date).toLocaleDateString()}</p>
+                </div>
+                {i === 0 && <span className="text-xs">🥇</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        <BottomNav />
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell mx-auto min-h-screen max-w-md px-4 pb-28 pt-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <p className="m-0 text-[10px] font-semibold uppercase tracking-wider text-cyan-300">{t.history}</p>
-          <h1 className="m-0 mt-1 text-xl font-extrabold">{t.bids}</h1>
-        </div>
-        <button className="tile grid h-9 w-9 place-items-center rounded-lg text-cyan-300">
-          <Icon name="filter" size={17} />
-        </button>
+      <header className="mb-6">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-300">{t.liveNow}</p>
+        <h1 className="text-xl font-extrabold mt-1">{t.bids}</h1>
       </header>
 
-      <div className="mt-5 flex rounded-xl border border-white/[.08] bg-[#141923] p-1">
-        <button
-          onClick={() => setTab('active')}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-bold ${tab === 'active' ? 'bg-gradient-to-r from-[#00A3FF] to-[#00D6FF] text-[#081018]' : 'text-[#8F9CAE]'}`}
-        >
-          <Icon name="bids" size={15} />{t.active} ({active.length})
-        </button>
-        <button
-          onClick={() => setTab('history')}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-bold ${tab === 'history' ? 'bg-gradient-to-r from-[#00A3FF] to-[#00D6FF] text-[#081018]' : 'text-[#8F9CAE]'}`}
-        >
-          <Icon name="history" size={15} />{t.history} ({history.length})
-        </button>
-      </div>
-
-      <section className="mt-6 space-y-3">
-        {visible.length === 0 ? (
-          <div className="tile mt-4 rounded-2xl p-8 text-center">
-            <span className="grid mx-auto h-14 w-14 place-items-center rounded-2xl border border-cyan-400/20 bg-cyan-400/5 text-cyan-300">
-              <Icon name="bids" size={26} />
-            </span>
-            <h2 className="mb-1 mt-3 text-[15px] font-bold">{t.noBids}</h2>
-            <p className="m-0 text-[11px] leading-relaxed text-[#8F9CAE]">{t.winner}</p>
-          </div>
-        ) : (
-          visible.map(b => {
-            const badge = statusBadge(b);
-            return (
-              <div key={b.id} className="tile flex items-center gap-4 rounded-2xl p-3 border border-white/[.05]">
-                <img src={b.auction.imageUrl} alt="" className="h-14 w-14 rounded-lg object-cover" />
-                <div className="flex-1 min-w-0">
-                  <h3 className="truncate text-[13px] font-bold">{b.auction.title}</h3>
-                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">{b.ticketNumber}</p>
-                  <p className="text-[10px] text-slate-400">{new Date(b.date).toLocaleDateString()}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  {b.amount ? (
-                    <b className="block text-sm font-bold text-amber-300">{b.amount} ETB</b>
-                  ) : (
-                    <b className="block text-[11px] font-bold text-slate-500">—</b>
-                  )}
-                  <span className={`mt-1 inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md ${badge.color}`}>
-                    {badge.label}
-                  </span>
-                </div>
+      {loading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => <div key={i} className="tile rounded-2xl h-20 animate-pulse" />)}
+        </div>
+      ) : auctions.length === 0 ? (
+        <div className="tile rounded-2xl p-8 text-center mt-4">
+          <span className="grid mx-auto h-14 w-14 place-items-center rounded-2xl border border-cyan-400/20 bg-cyan-400/5 text-cyan-300 mb-3">
+            <Icon name="bids" size={26} />
+          </span>
+          <p className="text-sm text-slate-400">{lang === 'am' ? 'ቀጥታ ጨረታ የለም' : 'No live auctions right now'}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {auctions.map(a => (
+            <button
+              key={a.id}
+              onClick={() => openLeaderboard(a)}
+              className="tile w-full flex items-center gap-4 rounded-2xl p-3 border border-white/[.05] text-left active:scale-[0.98] transition-transform"
+            >
+              <div className="relative shrink-0">
+                <img src={a.imageUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-400 border-2 border-[#0E131D]" />
               </div>
-            );
-          })
-        )}
-      </section>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-[14px] truncate">{a.title}</h3>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mt-0.5 ${catColor(a.category)}`}>
+                  {a.category}
+                </span>
+                <p className="text-[11px] text-slate-400 mt-1">⏱ {timeLeft(a.endTime)}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[10px] text-slate-400">{t.fee}</p>
+                <p className="text-sm font-bold text-amber-300">{a.entryFee} ETB</p>
+                <span className="text-[10px] text-cyan-300 mt-1 flex items-center gap-1 justify-end">
+                  {t.viewBidders} <Icon name="chevron-right" size={12} />
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
       <BottomNav />
     </main>
   );
 }
-

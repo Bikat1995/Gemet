@@ -44,9 +44,28 @@ app.get('/bids/history', async req => {
   const bids = await prisma.bid.findMany({ where:{ userId: s.userId }, include: { auction: true }, orderBy: { createdAt: 'desc' } });
   return { bids: bids.map(b => ({ id: b.id, amount: b.amount != null ? etb(b.amount) : null, paymentStatus: b.paymentStatus, ticketNumber: b.ticketNumber, status: b.status, date: b.createdAt, auction: { title: b.auction.title, status: b.auction.status, imageUrl: b.auction.imageUrl } })) };
 });
+function maskPhone(p: string | null) { if (!p) return 'Unknown'; return p.substring(0, 4) + '******'; }
+
 app.get('/winners', async () => {
   const winners = await prisma.auctionWinner.findMany({ include: { auction: true, user: true }, orderBy: { declaredAt: 'desc' } });
-  return { winners: winners.map(w => ({ id: w.auctionId, title: w.auction.title, description: w.auction.description, category: w.auction.category, image: w.auction.imageUrl, winner: w.user.username ?? 'Anonymous', amount: etb(w.winningBidAmount), date: w.declaredAt })) };
+  return { winners: winners.map(w => ({ id: w.auctionId, title: w.auction.title, description: w.auction.description, category: w.auction.category, image: w.auction.imageUrl, winner: maskPhone(w.user.phoneNumber), amount: etb(w.winningBidAmount), date: w.declaredAt })) };
+});
+
+app.get('/auctions/:id/bidders', async (req, reply) => {
+  const auctionId = (req.params as any).id;
+  const bids = await prisma.bid.findMany({
+    where: { auctionId, amount: { not: null }, paymentStatus: TransactionStatus.success },
+    include: { user: true },
+    orderBy: { createdAt: 'desc' }
+  });
+  return {
+    totalBids: bids.length,
+    bidders: bids.map(b => ({
+      id: b.id,
+      phone: maskPhone(b.user.phoneNumber),
+      date: b.createdAt
+    }))
+  };
 });
 app.get('/notifications', async req => {
   const s = await session(req);
@@ -138,6 +157,23 @@ app.post('/bids', async (req, reply) => {
     
     const state = await registerBid(auction.id, amount);
     await prisma.bid.updateMany({ where: { auctionId: auction.id, amount }, data: { status: state.unique ? BidStatus.unique : BidStatus.duplicated, calculatedAt: new Date() } });
+    
+    // Send Telegram ticket notification
+    try {
+      const userRecord = await prisma.user.findUnique({ where: { id: s.userId } });
+      if (userRecord?.telegramId) {
+        const tmaUrl = process.env.TMA_URL ?? 'https://gemet.vercel.app';
+        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: userRecord.telegramId.toString(),
+            text: `🎫 *Bid Confirmed!*\n\n📦 Auction: *${auction.title}*\n🔖 Ticket: \`${bid.ticketNumber}\`\n💰 Your Bid: *${etb(amount)} ETB*\n\nGood luck! The lowest unique bid wins. 🏆`,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '🎮 Open Gemet', web_app: { url: tmaUrl } }]] }
+          })
+        });
+      }
+    } catch (_) {}
     
     return { id: bid.id, ticketNumber: bid.ticketNumber, amount: etb(amount), unique: state.unique, frequency: state.frequency };
   } catch (e: any) {
