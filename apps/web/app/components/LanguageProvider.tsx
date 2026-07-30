@@ -44,6 +44,8 @@ const copy = {
     howWinAnswer: 'When the auction ends, we announce the winner via a Telegram message and on the Winners page.',
     contact: 'Contact us',
     contactText: 'For any support, reach us on Telegram: @gemet_support',
+    ourWinners: 'Our Winners',
+    ourWinnersDesc: 'See who won the latest auctions.',
   },
   am: {
     // Nav
@@ -86,6 +88,8 @@ const copy = {
     howWinAnswer: 'ጨረታ ሲጠናቀቅ አሸናፊን በቴሌግራም መልእክት እና በአሸናፊዎች ገጽ እናስታውቃለን።',
     contact: 'ያግኙን',
     contactText: 'ለማናቸውም ድጋፍ በቴሌግራም ያናግሩን፦ @gemet_support',
+    ourWinners: 'የኛ አሸናፊዎች',
+    ourWinnersDesc: 'የቅርብ ጊዜ ጨረታዎችን ማን እንዳሸነፈ ይመልከቱ።',
   }
 };
 

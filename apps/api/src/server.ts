@@ -44,7 +44,17 @@ app.get('/bids/history', async req => {
   const bids = await prisma.bid.findMany({ where:{ userId: s.userId }, include: { auction: true }, orderBy: { createdAt: 'desc' } });
   return { bids: bids.map(b => ({ id: b.id, amount: b.amount != null ? etb(b.amount) : null, paymentStatus: b.paymentStatus, ticketNumber: b.ticketNumber, status: b.status, date: b.createdAt, auction: { title: b.auction.title, status: b.auction.status, imageUrl: b.auction.imageUrl } })) };
 });
-function maskPhone(p: string | null) { if (!p) return 'Unknown'; return p.substring(0, 4) + '******'; }
+function maskPhone(p: string | null) {
+  if (!p) return 'Unknown';
+  if (p.length < 6) return p;
+  const isIntl = p.startsWith('+251');
+  const prefixLen = isIntl ? 7 : 4;
+  const prefix = p.substring(0, prefixLen);
+  const suffix = p.substring(p.length - 2);
+  const maskedLength = p.length - prefixLen - 2;
+  const masked = '*'.repeat(Math.max(0, maskedLength));
+  return prefix + masked + suffix;
+}
 
 app.get('/winners', async () => {
   const winners = await prisma.auctionWinner.findMany({ include: { auction: true, user: true }, orderBy: { declaredAt: 'desc' } });

@@ -63,7 +63,7 @@ export default function Winners() {
                   </div>
                   <div>
                     <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">Won by</p>
-                    <p className="text-xs font-bold text-cyan-300">@{w.winner}</p>
+                    <p className="text-xs font-bold text-cyan-300">{w.winner}</p>
                   </div>
                 </div>
                 <div className="text-right">

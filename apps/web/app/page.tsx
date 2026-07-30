@@ -112,8 +112,8 @@ export default function Home() {
       <section className="relative mt-5 min-h-32 overflow-hidden rounded-2xl bg-[linear-gradient(125deg,#172a85,#005acf_56%,#00b9e6)] p-4">
         <PromoArt />
         <p className="relative m-0 text-[11px] font-semibold text-blue-100">{t.featured}</p>
-        <h1 className="relative mb-1 mt-1 max-w-[58%] text-[21px] font-extrabold leading-tight text-white">Our Winners</h1>
-        <p className="relative mb-3 max-w-[55%] text-[10px] leading-snug text-blue-100">See who won the latest auctions.</p>
+        <h1 className="relative mb-1 mt-1 max-w-[58%] text-[21px] font-extrabold leading-tight text-white">{t.ourWinners}</h1>
+        <p className="relative mb-3 max-w-[55%] text-[10px] leading-snug text-blue-100">{t.ourWinnersDesc}</p>
         <Link href="/winners" className="relative inline-block rounded-lg bg-white/20 px-3 py-1.5 text-[10px] font-semibold text-white active:scale-95 transition-transform">
           {t.details} <Icon name="arrow" size={11} className="ml-1 inline" />
         </Link>
