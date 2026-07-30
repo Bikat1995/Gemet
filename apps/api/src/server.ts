@@ -32,19 +32,21 @@ app.post('/auth/telegram', async (req, reply) => {
 app.get('/health', async () => ({ ok: true, service: 'gemet-api' }));
 
 app.get('/auctions', async (req) => {
-  const cat = (req.query as any).category;
-  const where = { status: AuctionStatus.active, ...(cat && cat !== 'All' ? { category: cat } : {}) };
+  const { category: cat, q } = req.query as any;
+  const where: any = { status: AuctionStatus.active };
+  if (cat && cat !== 'All') where.category = cat;
+  if (q) where.title = { contains: q, mode: 'insensitive' };
   return { auctions: (await prisma.auction.findMany({ where, orderBy:{ endTime:'asc' } })).map(presentAuction) };
 });
 // Removed /wallet and /wallet/history
 app.get('/bids/history', async req => {
   const s = await session(req);
-  const bids = await prisma.bid.findMany({ where:{ userId: s.userId, amount: { not: null } }, include: { auction: true }, orderBy: { createdAt: 'desc' } });
-  return { bids: bids.map(b => ({ id: b.id, amount: b.amount != null ? etb(b.amount) : null, ticketNumber: b.ticketNumber, status: b.status, date: b.createdAt, auction: { title: b.auction.title, status: b.auction.status, imageUrl: b.auction.imageUrl } })) };
+  const bids = await prisma.bid.findMany({ where:{ userId: s.userId }, include: { auction: true }, orderBy: { createdAt: 'desc' } });
+  return { bids: bids.map(b => ({ id: b.id, amount: b.amount != null ? etb(b.amount) : null, paymentStatus: b.paymentStatus, ticketNumber: b.ticketNumber, status: b.status, date: b.createdAt, auction: { title: b.auction.title, status: b.auction.status, imageUrl: b.auction.imageUrl } })) };
 });
 app.get('/winners', async () => {
   const winners = await prisma.auctionWinner.findMany({ include: { auction: true, user: true }, orderBy: { declaredAt: 'desc' } });
-  return { winners: winners.map(w => ({ id: w.auctionId, title: w.auction.title, image: w.auction.imageUrl, winner: w.user.username ?? 'Anonymous', amount: etb(w.winningBidAmount), date: w.declaredAt })) };
+  return { winners: winners.map(w => ({ id: w.auctionId, title: w.auction.title, description: w.auction.description, category: w.auction.category, image: w.auction.imageUrl, winner: w.user.username ?? 'Anonymous', amount: etb(w.winningBidAmount), date: w.declaredAt })) };
 });
 app.get('/notifications', async req => {
   const s = await session(req);
@@ -100,6 +102,7 @@ app.post('/auctions/:id/manual-pay/submit', async (req, reply) => {
         data: {
           userId: s.userId,
           auctionId,
+          ticketNumber: `UND-${crypto.randomInt(1000, 999999)}`,
           txRef: body.txId,
           paymentMethod: body.paymentMethod,
           paymentStatus: TransactionStatus.verifying
@@ -344,13 +347,27 @@ app.get('/admin/winners', async () => {
   return { winners: winners.map(w => ({
     auctionId: w.auctionId,
     title: w.auction.title,
+    description: w.auction.description,
+    category: w.auction.category,
     username: w.user.username || 'Anonymous',
     phoneNumber: w.user.phoneNumber || 'Not provided',
     winningBidAmount: etb(w.winningBidAmount),
     date: w.declaredAt
   })) };
 });
-app.get('/admin/auctions', async () => ({ auctions: (await prisma.auction.findMany({ orderBy: { startTime: 'desc' } })).map(presentAuction) }));
+app.get('/admin/auctions', async () => {
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const auctions = await prisma.auction.findMany({
+    where: {
+      OR: [
+        { status: AuctionStatus.active },
+        { status: AuctionStatus.ended, endTime: { gt: oneDayAgo } }
+      ]
+    },
+    orderBy: { startTime: 'desc' }
+  });
+  return { auctions: auctions.map(presentAuction) };
+});
 app.post('/admin/auctions', async (req, reply) => {
   const schema = z.object({
     title: z.string().min(3),
@@ -405,5 +422,18 @@ export async function closeAuction(auctionId:string) {
   if (process.env.BOT_TOKEN) fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:String(user.telegramId),text:`🏆 Congratulations! You won “${auction.title}” with the lowest unique bid of ${etb(winningAmount)} ETB.`})}).catch(err => app.log.error(err, 'winner notification failed'));
   return winner;
 }
+
+// Auto-close auctions that have ended
+setInterval(async () => {
+  try {
+    const endedAuctions = await prisma.auction.findMany({ where: { status: AuctionStatus.active, endTime: { lte: new Date() } } });
+    for (const a of endedAuctions) {
+      console.log(`Auto-closing auction ${a.id}...`);
+      await closeAuction(a.id).catch(err => console.error(`Failed to close auction ${a.id}:`, err));
+    }
+  } catch (err) {
+    console.error('Auto-close cron error:', err);
+  }
+}, 10000); // Check every 10 seconds
 
 app.listen({ port:Number(process.env.PORT ?? 4000), host:'0.0.0.0' });

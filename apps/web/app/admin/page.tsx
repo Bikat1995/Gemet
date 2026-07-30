@@ -253,7 +253,7 @@ export default function AdminDashboard() {
                         <td className="px-4 py-3 font-medium text-white">{a.title}</td>
                         <td className="px-4 py-3 text-cyan-300 font-mono">{a.entryFee} ETB</td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${a.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'}`}>
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${a.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : a.status === 'ended' ? 'bg-amber-500/10 text-amber-400' : 'bg-slate-500/10 text-slate-400'}`}>
                             {a.status}
                           </span>
                         </td>
@@ -280,6 +280,7 @@ export default function AdminDashboard() {
                 <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
                   <tr>
                     <th className="px-4 py-3 rounded-tl-lg">Auction</th>
+                    <th className="px-4 py-3">Description</th>
                     <th className="px-4 py-3">Winner</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Winning Bid</th>
@@ -288,10 +289,11 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody>
                   {winners.length === 0 ? (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No winners yet</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No winners yet</td></tr>
                   ) : winners.map(w => (
                     <tr key={w.auctionId} className="border-b border-white/5">
-                      <td className="px-4 py-3 font-medium text-white">{w.title}</td>
+                      <td className="px-4 py-3 font-medium text-white max-w-[120px]"><div className="truncate">{w.title}</div></td>
+                      <td className="px-4 py-3 text-slate-400 text-xs max-w-[150px]"><div className="truncate">{w.description || '—'}</div></td>
                       <td className="px-4 py-3 text-white">{w.username}</td>
                       <td className="px-4 py-3 text-cyan-300">{w.phoneNumber}</td>
                       <td className="px-4 py-3 text-emerald-400 font-mono">{w.winningBidAmount} ETB</td>
