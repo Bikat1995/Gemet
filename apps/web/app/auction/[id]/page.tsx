@@ -257,6 +257,7 @@ function AuctionInner() {
   const press = (x: string | number) => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
     if (x === '⌫') { setValue(v => v.slice(0, -1)); }
+    else if (x === 'C') { setValue(''); }
     else { setValue(v => (v.length < 8 ? v + x : v)); }
   };
 
@@ -374,7 +375,7 @@ function AuctionInner() {
             </div>
 
             <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0, '⌫'].map(n => (
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0, '⌫'].map(n => (
                 <button key={n} onClick={() => press(n)} className="tile h-[52px] rounded-xl text-lg font-bold active:scale-95 transition-transform">{n}</button>
               ))}
             </div>

@@ -525,7 +525,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Entry Fee (ETB)</label>
-                  <input required type="number" min="1" step="0.01" value={entryFee} onChange={e => setEntryFee(e.target.value)} className="w-full bg-[#0A0D14] border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-cyan-500" placeholder="e.g. 30" />
+                  <input required type="number" min="1" step="1" value={entryFee} onChange={e => setEntryFee(e.target.value)} className="w-full bg-[#0A0D14] border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-cyan-500" placeholder="e.g. 30" />
                 </div>
               </div>
               <div>
