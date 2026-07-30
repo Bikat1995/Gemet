@@ -6,6 +6,7 @@ type Stats = { users: number; liveAuctions: number; totalDeposits: string; total
 type User = { id: string; username: string; phoneNumber: string; walletBalance: number; createdAt: string; };
 type Auction = { id: string; title: string; entryFee: string; status: string; };
 type Winner = { auctionId: string; title: string; username: string; phoneNumber: string; winningBidAmount: string; date: string; };
+type PendingPayment = { id: string; username: string; phoneNumber: string | null; auctionTitle: string; entryFee: string; paymentMethod: string | null; txId: string | null; createdAt: string; };
 
 export default function AdminDashboard() {
   const [pass, setPass] = useState('');
@@ -14,7 +15,9 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [winners, setWinners] = useState<Winner[]>([]);
+  const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
   
   // New Auction Form State
   const [title, setTitle] = useState('');
@@ -28,16 +31,18 @@ export default function AdminDashboard() {
   const api = 'https://gemet-api.onrender.com';
 
   const fetchAll = async () => {
-    const [sRes, uRes, aRes, wRes] = await Promise.all([
+    const [sRes, uRes, aRes, wRes, pRes] = await Promise.all([
       fetch(`${api}/admin/stats`),
       fetch(`${api}/admin/users`),
       fetch(`${api}/admin/auctions`),
-      fetch(`${api}/admin/winners`)
+      fetch(`${api}/admin/winners`),
+      fetch(`${api}/admin/payments/pending`),
     ]);
     if(sRes.ok) setStats(await sRes.json());
     if(uRes.ok) setUsers((await uRes.json()).users);
     if(aRes.ok) setAuctions((await aRes.json()).auctions);
     if(wRes.ok) setWinners((await wRes.json()).winners);
+    if(pRes.ok) setPendingPayments((await pRes.json()).payments);
   };
 
   useEffect(() => {
@@ -97,6 +102,22 @@ export default function AdminDashboard() {
     } catch (err) {
       alert(`Error: ${(err as Error).message}`);
     }
+  };
+
+  const handleVerifyPayment = async (id: string, status: 'success' | 'failed') => {
+    setVerifyingId(id);
+    try {
+      const res = await fetch(`${api}/admin/payments/${id}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) fetchAll();
+      else alert('Verification failed');
+    } catch (err) {
+      alert(`Error: ${(err as Error).message}`);
+    }
+    setVerifyingId(null);
   };
 
   const exportCsv = (data: any[], filename: string) => {
@@ -275,6 +296,73 @@ export default function AdminDashboard() {
                       <td className="px-4 py-3 text-cyan-300">{w.phoneNumber}</td>
                       <td className="px-4 py-3 text-emerald-400 font-mono">{w.winningBidAmount} ETB</td>
                       <td className="px-4 py-3 text-slate-400">{new Date(w.date).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* ── Pending Payments ── */}
+          <section className="bg-[#141923] p-6 rounded-2xl border border-amber-500/20 overflow-hidden mt-0">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg" style={{ background: 'rgba(251,191,36,0.1)' }}>
+                <span className="text-amber-400 text-base">⏳</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">Pending Payment Verifications</h3>
+                <p className="text-xs text-slate-500">Approve or reject user-submitted transaction IDs</p>
+              </div>
+              <span className="ml-auto text-xs font-bold rounded-full px-3 py-1" style={{ background: pendingPayments.length > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.05)', color: pendingPayments.length > 0 ? '#fbbf24' : '#64748b' }}>
+                {pendingPayments.length} pending
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
+                  <tr>
+                    <th className="px-4 py-3 rounded-tl-lg">User</th>
+                    <th className="px-4 py-3">Phone</th>
+                    <th className="px-4 py-3">Auction</th>
+                    <th className="px-4 py-3">Method</th>
+                    <th className="px-4 py-3">Transaction ID</th>
+                    <th className="px-4 py-3">Amount</th>
+                    <th className="px-4 py-3 rounded-tr-lg">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingPayments.length === 0 ? (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No pending verifications 🎉</td></tr>
+                  ) : pendingPayments.map(p => (
+                    <tr key={p.id} className="border-b border-white/5">
+                      <td className="px-4 py-3 font-medium text-white">{p.username}</td>
+                      <td className="px-4 py-3 text-cyan-300 text-xs">{p.phoneNumber || '—'}</td>
+                      <td className="px-4 py-3 text-slate-300 max-w-[140px] truncate">{p.auctionTitle}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-1 rounded font-semibold" style={{ background: p.paymentMethod?.includes('telebirr') ? 'rgba(0,173,239,0.1)' : 'rgba(247,148,29,0.1)', color: p.paymentMethod?.includes('telebirr') ? '#00ADEF' : '#F7941D' }}>
+                          {p.paymentMethod?.replace('_', ' ') ?? '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-amber-300 text-xs">{p.txId ?? '—'}</td>
+                      <td className="px-4 py-3 text-emerald-400 font-mono text-xs">{p.entryFee} ETB</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleVerifyPayment(p.id, 'success')}
+                            disabled={verifyingId === p.id}
+                            className="text-xs bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50"
+                          >
+                            ✓ Approve
+                          </button>
+                          <button
+                            onClick={() => handleVerifyPayment(p.id, 'failed')}
+                            disabled={verifyingId === p.id}
+                            className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50"
+                          >
+                            ✕ Reject
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

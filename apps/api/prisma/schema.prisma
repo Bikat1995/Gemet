@@ -28,6 +28,7 @@ enum TransactionType {
 
 enum TransactionStatus {
   pending
+  verifying
   success
   failed
 }
@@ -64,6 +65,7 @@ model Bid {
   
   // Payment info
   txRef String? @unique @map("tx_ref")
+  paymentMethod String? @map("payment_method")
   paymentStatus TransactionStatus @default(pending) @map("payment_status")
   
   // Bid info (optional until placed)

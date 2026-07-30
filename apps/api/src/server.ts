@@ -1,12 +1,11 @@
 import crypto from 'node:crypto';
-import { execSync } from 'node:child_process';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import websocket from '@fastify/websocket';
 import { z } from 'zod';
-import { AuctionStatus, BidStatus, TransactionStatus, TransactionType } from '@prisma/client';
-import { prisma, redisSub, verifyTelegramInitData, validChapaSignature, cents, etb } from './lib.js';
+import { AuctionStatus, BidStatus, TransactionStatus } from '@prisma/client';
+import { prisma, redisSub, verifyTelegramInitData, cents, etb } from './lib.js';
 import { lowestUnique, registerBid } from './luba.js';
 
 const app = Fastify({ logger: true, bodyLimit: 20971520 });
@@ -60,88 +59,58 @@ app.post('/notifications/read', async req => {
 app.get('/auctions/:id/ticket', async (req) => {
   const s = await session(req);
   const auctionId = (req.params as any).id;
-  let ticket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
-  
-  // Actively verify pending transactions from Chapa
-  if (ticket && ticket.paymentStatus === TransactionStatus.pending && ticket.txRef) {
-    try {
-      const res = await fetch(`https://api.chapa.co/v1/transaction/verify/${ticket.txRef}`, {
-        headers: { Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}` }
-      });
-      const data = await res.json();
-      if (res.ok && data.status === 'success' && data.data?.status === 'success') {
-        ticket = await prisma.bid.update({
-          where: { id: ticket.id },
-          data: { paymentStatus: TransactionStatus.success }
-        });
-        const auction = await prisma.auction.findUnique({ where: { id: ticket.auctionId } });
-        await prisma.notification.create({ data: { userId: ticket.userId, title: 'Payment Successful', message: `You have successfully paid the entry fee for ${auction?.title ?? 'the auction'}. You can now place your bid!` }});
-      }
-    } catch (e) {
-      console.error('Active verification failed:', e);
-    }
-  }
+  const ticket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
   
   return { ticket };
 });
 
-app.post('/auctions/:id/pay', async (req, reply) => {
+app.post('/auctions/:id/manual-pay/submit', async (req, reply) => {
   try {
     const s = await session(req);
     const auctionId = (req.params as any).id;
+    const body = z.object({ txId: z.string().min(3), paymentMethod: z.string().min(2) }).parse(JSON.parse((req.body as Buffer).toString()));
     
     const auction = await prisma.auction.findUnique({ where: { id: auctionId } });
     if (!auction || auction.status !== AuctionStatus.active) return reply.code(404).send({ error: 'Auction not found or not active' });
-    
+
     const existingTicket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
+    
+    // Check if they already have a ticket that is paid
     if (existingTicket?.paymentStatus === TransactionStatus.success && existingTicket.amount == null) {
       return reply.code(400).send({ error: 'You already paid. Please submit your bid.' });
     }
+    
+    // Make sure txRef is not already used
+    const existingTx = await prisma.bid.findUnique({ where: { txRef: body.txId } });
+    if (existingTx && existingTx.id !== existingTicket?.id) {
+      return reply.code(400).send({ error: 'Transaction ID already used.' });
+    }
 
-    const txRef = `gemet-${crypto.randomUUID()}`;
-    
-    await prisma.bid.create({
-      data: {
-        userId: s.userId,
-        auctionId,
-        txRef,
-        paymentStatus: TransactionStatus.pending
-      }
-    });
-
-    const tmaUrl = process.env.TMA_URL ?? 'https://gemet.vercel.app';
-    const returnUrl = `${tmaUrl}/auction/${auctionId}`;
-    
-    const res = await fetch('https://api.chapa.co/v1/transaction/initialize', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        amount: etb(auction.entryFee),
-        currency: 'ETB',
-        tx_ref: txRef,
-        callback_url: `${process.env.API_URL}/webhooks/chapa`,
-        return_url: returnUrl
-      })
-    });
-    
-    const rawText = await res.text();
-    let payload: any;
-    try {
-      payload = JSON.parse(rawText);
-    } catch (e) {
-      console.error('Chapa non-JSON response:', rawText);
-      return reply.code(502).send({ error: 'Payment provider error', details: rawText });
+    if (existingTicket) {
+      await prisma.bid.update({
+        where: { id: existingTicket.id },
+        data: {
+          txRef: body.txId,
+          paymentMethod: body.paymentMethod,
+          paymentStatus: TransactionStatus.verifying
+        }
+      });
+    } else {
+      await prisma.bid.create({
+        data: {
+          userId: s.userId,
+          auctionId,
+          txRef: body.txId,
+          paymentMethod: body.paymentMethod,
+          paymentStatus: TransactionStatus.verifying
+        }
+      });
     }
     
-    if (!res.ok) {
-      console.error('Chapa Error:', payload);
-      return reply.code(502).send({ error: 'Payment provider unavailable', details: payload });
-    }
-    
-    return { txRef, checkoutUrl: payload.data?.checkout_url };
+    return { success: true };
   } catch (err: any) {
-    console.error('Pay Endpoint Error:', err);
-    return reply.code(500).send({ error: 'Internal Server Error', details: err.message });
+    console.error('Manual Pay Submit Error:', err);
+    return reply.code(400).send({ error: 'Failed to submit transaction.', details: err.message });
   }
 });
 
@@ -280,21 +249,47 @@ app.post('/webhooks/telegram-admin', async (req, reply) => {
   return { success: true };
 });
 
-app.post('/webhooks/chapa', async (req, reply) => {
-  const raw = (req.body as Buffer).toString();
-  if (!validChapaSignature(raw, req.headers['x-chapa-signature'] as string)) return reply.code(401).send({error:'Invalid signature'});
-  const event:any = JSON.parse(raw); const txRef = event.tx_ref ?? event.data?.tx_ref; const success = (event.status ?? event.data?.status) === 'success';
-  if (!txRef || !success) return { received:true };
-  
-  await prisma.$transaction(async tx => {
-    const ticket = await tx.bid.findUnique({where:{txRef}}); 
-    if (!ticket || ticket.paymentStatus === TransactionStatus.success) return;
+app.get('/admin/payments/pending', async (req) => {
+  const pending = await prisma.bid.findMany({
+    where: { paymentStatus: TransactionStatus.verifying },
+    include: { auction: true, user: true },
+    orderBy: { createdAt: 'asc' }
+  });
+  return {
+    payments: pending.map(p => ({
+      id: p.id,
+      username: p.user.username || 'Anonymous',
+      phoneNumber: p.user.phoneNumber,
+      auctionTitle: p.auction.title,
+      entryFee: etb(p.auction.entryFee),
+      paymentMethod: p.paymentMethod,
+      txId: p.txRef,
+      createdAt: p.createdAt
+    }))
+  };
+});
+
+app.post('/admin/payments/:id/verify', async (req, reply) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { status } = z.object({ status: z.enum(['success', 'failed']) }).parse(JSON.parse((req.body as Buffer).toString()));
     
-    await tx.bid.update({where:{id:ticket.id},data:{paymentStatus:TransactionStatus.success}});
-    const auction = await tx.auction.findUnique({where:{id:ticket.auctionId}});
-    await tx.notification.create({data:{userId:ticket.userId,title:'Payment Successful',message:`You have successfully paid the entry fee for ${auction?.title ?? 'the auction'}. You can now place your bid!`}});
-  }, { isolationLevel:'Serializable' });
-  return { received:true };
+    const bid = await prisma.bid.update({
+      where: { id },
+      data: { paymentStatus: status as TransactionStatus },
+      include: { auction: true }
+    });
+    
+    if (status === 'success') {
+      await prisma.notification.create({ data: { userId: bid.userId, title: 'Payment Approved', message: `Your payment for ${bid.auction.title} was approved! You can now place your bid.` }});
+    } else {
+      await prisma.notification.create({ data: { userId: bid.userId, title: 'Payment Rejected', message: `Your transaction ID for ${bid.auction.title} was invalid. Please try again.` }});
+    }
+    
+    return { success: true };
+  } catch (e: any) {
+    return reply.code(400).send({ error: 'Verification failed' });
+  }
 });
 
 app.get('/tickets/all', async (req) => {
