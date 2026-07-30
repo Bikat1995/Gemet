@@ -46,6 +46,7 @@ const copy = {
     contactText: 'For any support, reach us on Telegram: @gemet_support',
     ourWinners: 'Our Winners',
     ourWinnersDesc: 'See who won the latest auctions.',
+    auctionEnded: 'AUCTION ENDED',
   },
   am: {
     // Nav
@@ -90,6 +91,7 @@ const copy = {
     contactText: 'ለማናቸውም ድጋፍ በቴሌግራም ያናግሩን፦ @gemet_support',
     ourWinners: 'የኛ አሸናፊዎች',
     ourWinnersDesc: 'የቅርብ ጊዜ ጨረታዎችን ማን እንዳሸነፈ ይመልከቱ።',
+    auctionEnded: 'ጨረታው ተጠናቋል',
   }
 };
 

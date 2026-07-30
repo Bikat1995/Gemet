@@ -174,20 +174,30 @@ export default function Home() {
             <p className="text-sm text-slate-500">No live auctions{search ? ` matching "${search}"` : ' right now'}.</p>
           </div>
         ) : (
-          filtered.map((a, i) => (
+          filtered.map((a, i) => {
+            const isEnded = new Date(a.endTime).getTime() <= Date.now();
+            return (
             <motion.div
               key={a.id}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              whileTap={{ scale: 0.94 }}
+              whileTap={{ scale: isEnded ? 1 : 0.94 }}
               transition={{ delay: i * 0.07 }}
               onClick={() => {
+                if (isEnded) return;
                 window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
                 setClickedId(a.id);
                 router.push(`/auction/${a.id}`);
               }}
-              className="tile overflow-hidden rounded-[14px] p-2 cursor-pointer relative"
+              className={`tile overflow-hidden rounded-[14px] p-2 relative ${isEnded ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
             >
+              {isEnded && (
+                <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden rounded-[14px]">
+                  <div className="absolute top-4 -right-12 w-40 rotate-45 bg-red-600/90 text-white text-[9px] font-black tracking-widest text-center py-1 shadow-lg backdrop-blur-sm">
+                    {t.auctionEnded}
+                  </div>
+                </div>
+              )}
               <div className="product-frame relative aspect-square rounded-[10px]">
                 <img src={a.imageUrl} alt={a.title} className="h-full w-full object-cover mix-blend-luminosity opacity-90" />
                 <span className="absolute bottom-2 left-2 rounded-md bg-black/65 px-1.5 py-1 text-[10px] text-amber-300">
@@ -224,7 +234,8 @@ export default function Home() {
                 )}
               </AnimatePresence>
             </motion.div>
-          ))
+            );
+          })
         )}
       </section>
       <BottomNav />

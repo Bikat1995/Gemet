@@ -150,15 +150,24 @@ export default function Bids() {
         </div>
       ) : (
         <div className="space-y-3">
-          {auctions.map(a => (
+          {auctions.map(a => {
+            const isEnded = new Date(a.endTime).getTime() <= Date.now();
+            return (
             <button
               key={a.id}
-              onClick={() => openLeaderboard(a)}
-              className="tile w-full flex items-center gap-4 rounded-2xl p-3 border border-white/[.05] text-left active:scale-[0.98] transition-transform"
+              onClick={() => { if (!isEnded) openLeaderboard(a); }}
+              className={`tile relative w-full flex items-center gap-4 rounded-2xl p-3 border border-white/[.05] text-left transition-transform overflow-hidden ${isEnded ? 'opacity-60 cursor-not-allowed' : 'active:scale-[0.98]'}`}
             >
+              {isEnded && (
+                <div className="absolute inset-0 z-20 pointer-events-none">
+                  <div className="absolute top-3 -right-10 w-32 rotate-45 bg-red-600/90 text-white text-[8px] font-black tracking-widest text-center py-1 shadow-lg backdrop-blur-sm">
+                    {t.auctionEnded}
+                  </div>
+                </div>
+              )}
               <div className="relative shrink-0">
-                <img src={a.imageUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
-                <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-400 border-2 border-[#0E131D]" />
+                <img src={a.imageUrl} alt="" className="h-16 w-16 rounded-xl object-cover mix-blend-luminosity opacity-90" />
+                <span className={`absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0E131D] ${isEnded ? 'bg-red-500' : 'bg-emerald-400'}`} />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-[14px] truncate">{a.title}</h3>
@@ -170,12 +179,15 @@ export default function Bids() {
               <div className="text-right shrink-0">
                 <p className="text-[10px] text-slate-400">{t.fee}</p>
                 <p className="text-sm font-bold text-amber-300">{a.entryFee} ETB</p>
-                <span className="text-[10px] text-cyan-300 mt-1 flex items-center gap-1 justify-end">
-                  {t.viewBidders} <Icon name="chevron-right" size={12} />
-                </span>
+                {!isEnded && (
+                  <span className="text-[10px] text-cyan-300 mt-1 flex items-center gap-1 justify-end">
+                    {t.viewBidders} <Icon name="chevron-right" size={12} />
+                  </span>
+                )}
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
       <BottomNav />
