@@ -388,6 +388,28 @@ app.get('/admin/users', async () => {
   const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
   return { users: users.map(u => ({ ...u, telegramId: String(u.telegramId) })) };
 });
+
+app.get('/admin/bids', async () => {
+  const bids = await prisma.bid.findMany({
+    where: { amount: { not: null } },
+    include: { auction: true, user: true },
+    orderBy: { createdAt: 'desc' },
+    take: 500
+  });
+  return {
+    bids: bids.map(b => ({
+      id: b.id,
+      auctionTitle: b.auction.title,
+      auctionCategory: b.auction.category,
+      username: b.user.username || 'Anonymous',
+      phoneNumber: b.user.phoneNumber || 'Not provided',
+      ticketNumber: b.ticketNumber,
+      amount: etb(b.amount!),
+      status: b.status,
+      date: b.createdAt
+    }))
+  };
+});
 app.get('/admin/winners', async () => {
   const winners = await prisma.auctionWinner.findMany({ include: { auction: true, user: true }, orderBy: { declaredAt: 'desc' } });
   return { winners: winners.map(w => ({

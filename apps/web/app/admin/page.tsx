@@ -9,8 +9,9 @@ type User = { id: string; username: string; phoneNumber: string; walletBalance: 
 type Auction = { id: string; title: string; entryFee: string; status: string };
 type Winner = { auctionId: string; title: string; description?: string; category?: string; username: string; phoneNumber: string; winningBidAmount: string; date: string };
 type PendingPayment = { id: string; username: string; phoneNumber: string | null; auctionTitle: string; entryFee: string; paymentMethod: string | null; txId: string | null; createdAt: string };
+type AdminBid = { id: string; auctionTitle: string; auctionCategory: string; username: string; phoneNumber: string; ticketNumber: string; amount: string; status: string; date: string };
 
-type Tab = 'overview' | 'payments' | 'auctions' | 'users' | 'winners';
+type Tab = 'overview' | 'payments' | 'auctions' | 'users' | 'winners' | 'bids';
 
 function StatCard({ label, value, color, icon }: { label: string; value: string | number; color: string; icon: string }) {
   return (
@@ -36,6 +37,7 @@ export default function AdminDashboard() {
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [winners, setWinners] = useState<Winner[]>([]);
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
+  const [bids, setBids] = useState<AdminBid[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -47,18 +49,20 @@ export default function AdminDashboard() {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchAll = async () => {
-    const [sRes, uRes, aRes, wRes, pRes] = await Promise.all([
+    const [sRes, uRes, aRes, wRes, pRes, bRes] = await Promise.all([
       fetch(`${api}/admin/stats`),
       fetch(`${api}/admin/users`),
       fetch(`${api}/admin/auctions`),
       fetch(`${api}/admin/winners`),
       fetch(`${api}/admin/payments/pending`),
+      fetch(`${api}/admin/bids`),
     ]);
     if (sRes.ok) setStats(await sRes.json());
     if (uRes.ok) setUsers((await uRes.json()).users);
     if (aRes.ok) setAuctions((await aRes.json()).auctions);
     if (wRes.ok) setWinners((await wRes.json()).winners);
     if (pRes.ok) setPendingPayments((await pRes.json()).payments);
+    if (bRes.ok) setBids((await bRes.json()).bids);
   };
 
   useEffect(() => { if (auth) fetchAll(); }, [auth]);
@@ -135,6 +139,7 @@ export default function AdminDashboard() {
     { id: 'auctions', label: '🏷 Auctions' },
     { id: 'users', label: '👤 Users' },
     { id: 'winners', label: '🏆 Winners' },
+    { id: 'bids', label: '🎯 All Bids' },
   ];
 
   if (!auth) {
@@ -432,6 +437,52 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Bids Tab */}
+        {tab === 'bids' && (
+          <div className="bg-[#111827] rounded-2xl border border-white/5 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">All Placed Bids ({bids.length})</h3>
+              <button onClick={() => exportCsv(bids, 'bids.csv')} className="text-xs bg-white/10 px-3 py-1.5 rounded-lg text-slate-300">⬇ CSV</button>
+            </div>
+            {bids.length === 0 ? (
+              <p className="text-center text-slate-400 py-10">No bids placed yet</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
+                    <tr>
+                      <th className="px-4 py-3 rounded-tl-lg">Auction</th>
+                      <th className="px-4 py-3">User</th>
+                      <th className="px-4 py-3">Phone</th>
+                      <th className="px-4 py-3">Ticket</th>
+                      <th className="px-4 py-3">Amount</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 rounded-tr-lg">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bids.map(b => (
+                      <tr key={b.id} className="border-b border-white/5">
+                        <td className="px-4 py-3 font-medium text-white max-w-[150px]"><div className="truncate">{b.auctionTitle}</div></td>
+                        <td className="px-4 py-3 text-white">{b.username}</td>
+                        <td className="px-4 py-3 text-cyan-300 font-mono">{b.phoneNumber}</td>
+                        <td className="px-4 py-3 text-slate-300 font-mono text-xs">{b.ticketNumber}</td>
+                        <td className="px-4 py-3 text-emerald-400 font-mono">{b.amount} ETB</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${b.status === 'unique' ? 'bg-emerald-500/10 text-emerald-400' : b.status === 'duplicated' ? 'bg-red-500/10 text-red-400' : 'bg-slate-500/10 text-slate-400'}`}>
+                            {b.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-400 text-xs">{new Date(b.date).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
