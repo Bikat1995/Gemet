@@ -198,25 +198,6 @@ function AuctionInner() {
     return () => clearInterval(pollRef.current);
   }, [ticket?.paymentStatus, token]);
 
-  // WebSocket for real-time duplicate detection
-  useEffect(() => {
-    if (!id || ticket?.amount != null) return;
-    const wsUrl = api.replace(/^http/, 'ws') + `/events/${id}`;
-    let ws: WebSocket;
-    try {
-      ws = new WebSocket(wsUrl);
-      ws.onmessage = e => {
-        try {
-          const x = JSON.parse(e.data);
-          const bidCents = Math.round(Number(value) * 100);
-          if (x.amount === String(bidCents) && x.frequency > 1) {
-            setNotice({ kind: 'duplicate', text: 'Someone else also bid this amount — it is now duplicated!' });
-          }
-        } catch {}
-      };
-    } catch {}
-    return () => { try { ws?.close(); } catch {} };
-  }, [id, value, ticket]);
 
   const openPayModal = () => {
     setPayModal('select');
@@ -275,13 +256,8 @@ function AuctionInner() {
         setNotice({ kind: 'error', text: x.error ?? 'Bid failed. Try again.' });
       } else {
         setTicket({ ...ticket, amount: x.amount, ticketNumber: x.ticketNumber });
-        if (x.unique) {
-          setNotice({ kind: 'unique', text: `✅ Unique bid placed: ${value} ETB` });
-          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-        } else {
-          setNotice({ kind: 'duplicate', text: `⚠️ Duplicate bid: ${value} ETB — someone else bid this too!` });
-          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
-        }
+        setNotice({ kind: 'success', text: `✅ ${t.bidSubmitted}: ${value} ETB` });
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       }
     } catch {
       setNotice({ kind: 'error', text: 'Network error — check your connection.' });

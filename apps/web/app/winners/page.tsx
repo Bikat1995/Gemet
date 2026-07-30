@@ -6,16 +6,89 @@ import { useLanguage } from '../components/LanguageProvider';
 
 type Winner = { id: string; title: string; description: string; category: string; image: string; winner: string; amount: string; date: string; };
 
+const api = process.env.NEXT_PUBLIC_API_URL || 'https://gemet-api.onrender.com';
+
 export default function Winners() {
   const { t } = useLanguage();
   const [winners, setWinners] = useState<Winner[]>([]);
+  const [selectedWinner, setSelectedWinner] = useState<Winner | null>(null);
+  const [losers, setLosers] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [losersLoading, setLosersLoading] = useState(false);
 
   useEffect(() => {
-    fetch(`${'https://gemet-api.onrender.com'}/winners`)
+    fetch(`${api}/winners`)
       .then(r => r.ok ? r.json() : null)
       .then(x => x?.winners && setWinners(x.winners))
       .catch(() => {});
   }, []);
+
+  const openLosers = (w: Winner) => {
+    setSelectedWinner(w);
+    setSearch('');
+    setLosersLoading(true);
+    setLosers([]);
+    fetch(`${api}/winners/${w.id}/losers`)
+      .then(r => r.ok ? r.json() : null)
+      .then(x => x?.losers && setLosers(x.losers))
+      .catch(() => {})
+      .finally(() => setLosersLoading(false));
+  };
+
+  const filteredLosers = losers.filter(l => l.ticketNumber?.toLowerCase().includes(search.toLowerCase()) || l.phone.includes(search));
+
+  if (selectedWinner) {
+    return (
+      <main className="app-shell mx-auto min-h-screen max-w-md px-4 pb-8 pt-5">
+        <header className="flex items-center gap-3 mb-6">
+          <button onClick={() => setSelectedWinner(null)} className="tile h-9 w-9 grid place-items-center rounded-xl text-cyan-300">
+            <Icon name="back" size={18} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t.lostBids}</p>
+            <h1 className="text-lg font-extrabold truncate text-white">{selectedWinner.title}</h1>
+          </div>
+        </header>
+        
+        <div className="mb-4">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
+            <input 
+              type="text" 
+              placeholder={t.searchBids}
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+              className="w-full bg-[#0E131D] border border-white/10 rounded-xl pl-9 pr-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors" 
+            />
+          </div>
+        </div>
+
+        {losersLoading ? (
+          <div className="space-y-2 mt-4">
+            {[1, 2, 3].map(i => <div key={i} className="tile rounded-xl h-12 animate-pulse bg-white/5" />)}
+          </div>
+        ) : filteredLosers.length === 0 ? (
+          <div className="tile rounded-2xl p-8 text-center mt-4 border border-white/5">
+            <p className="text-sm text-slate-400">{t.noLostBids}</p>
+          </div>
+        ) : (
+          <div className="space-y-2 mt-4 max-h-[70vh] overflow-y-auto pb-10 pr-1">
+            {filteredLosers.map((l, i) => (
+              <div key={l.id} className="tile flex items-center justify-between rounded-xl px-4 py-3 border border-white/[.04]">
+                <div>
+                  <p className="font-mono text-sm text-white font-bold">{l.phone}</p>
+                  <p className="text-[10px] text-slate-500">Ticket: {l.ticketNumber}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-slate-300">{l.amount} ETB</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell mx-auto min-h-screen max-w-md px-4 pb-8 pt-5">
@@ -71,6 +144,12 @@ export default function Winners() {
                   <p className="text-sm font-black text-amber-400">{w.amount} ETB</p>
                 </div>
               </div>
+              <button 
+                onClick={() => openLosers(w)}
+                className="mt-2 w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-300 transition-colors border border-white/5"
+              >
+                {t.viewLostBids}
+              </button>
             </div>
           ))
         )}

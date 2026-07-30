@@ -47,6 +47,11 @@ const copy = {
     ourWinners: 'Our Winners',
     ourWinnersDesc: 'See who won the latest auctions.',
     auctionEnded: 'AUCTION ENDED',
+    lostBids: 'Lost Bids',
+    viewLostBids: 'View Lost Bids',
+    noLostBids: 'No lost bids found.',
+    searchBids: 'Search by Ticket ID or Phone...',
+    bidSubmitted: 'Bid submitted successfully',
   },
   am: {
     // Nav
@@ -92,6 +97,11 @@ const copy = {
     ourWinners: 'የኛ አሸናፊዎች',
     ourWinnersDesc: 'የቅርብ ጊዜ ጨረታዎችን ማን እንዳሸነፈ ይመልከቱ።',
     auctionEnded: 'ጨረታው ተጠናቋል',
+    lostBids: 'ያልተሳኩ ጨረታዎች',
+    viewLostBids: 'ያልተሳኩ ጨረታዎችን ይመልከቱ',
+    noLostBids: 'ምንም ያልተሳካ ጨረታ አልተገኘም።',
+    searchBids: 'በቲኬት መለያ ወይም ስልክ ይፈልጉ...',
+    bidSubmitted: 'ጨረታው በተሳካ ሁኔታ ገብቷል',
   }
 };
 

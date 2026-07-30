@@ -33,7 +33,11 @@ app.get('/health', async () => ({ ok: true, service: 'gemet-api' }));
 
 app.get('/auctions', async (req) => {
   const { category: cat, q } = req.query as any;
-  const where: any = { status: AuctionStatus.active };
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const where: any = { 
+    status: AuctionStatus.active,
+    endTime: { gt: twentyFourHoursAgo }
+  };
   if (cat && cat !== 'All') where.category = cat;
   if (q) where.title = { contains: q, mode: 'insensitive' };
   return { auctions: (await prisma.auction.findMany({ where, orderBy:{ endTime:'asc' } })).map(presentAuction) };
@@ -73,6 +77,30 @@ app.get('/auctions/:id/bidders', async (req, reply) => {
     bidders: bids.map(b => ({
       id: b.id,
       phone: maskPhone(b.user.phoneNumber),
+      date: b.createdAt
+    }))
+  };
+});
+
+app.get('/winners/:auctionId/losers', async (req) => {
+  const auctionId = (req.params as any).auctionId;
+  const winner = await prisma.auctionWinner.findUnique({ where: { auctionId } });
+  const bids = await prisma.bid.findMany({
+    where: { 
+       auctionId, 
+       amount: { not: null }, 
+       paymentStatus: TransactionStatus.success,
+       ...(winner ? { id: { not: winner.winningBidId } } : {})
+    },
+    include: { user: true },
+    orderBy: { createdAt: 'desc' }
+  });
+  return {
+    losers: bids.map(b => ({
+      id: b.id,
+      ticketNumber: b.ticketNumber,
+      phone: maskPhone(b.user.phoneNumber),
+      amount: etb(b.amount!),
       date: b.createdAt
     }))
   };
