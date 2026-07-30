@@ -402,11 +402,28 @@ app.post('/admin/auctions', async (req, reply) => {
 app.delete('/admin/auctions/:id', async (req, reply) => {
   const { id } = req.params as { id: string };
   try {
+    // Delete related bids and winner first to avoid FK constraint errors
+    await prisma.bid.deleteMany({ where: { auctionId: id } });
+    await prisma.auctionWinner.deleteMany({ where: { auctionId: id } });
     await prisma.auction.delete({ where: { id } });
     return { success: true };
   } catch (err) {
     return reply.code(500).send({ error: 'Failed to delete auction' });
   }
+});
+
+// DANGER: wipe everything - protected by a secret key
+app.post('/admin/reset-all', async (req, reply) => {
+  const { secret } = JSON.parse((req.body as Buffer).toString());
+  if (secret !== (process.env.ADMIN_RESET_SECRET ?? 'gemet-reset-2025')) {
+    return reply.code(403).send({ error: 'Forbidden' });
+  }
+  await prisma.notification.deleteMany();
+  await prisma.auctionWinner.deleteMany();
+  await prisma.bid.deleteMany();
+  await prisma.auction.deleteMany();
+  await prisma.user.deleteMany();
+  return { success: true, message: 'All data cleared' };
 });
 
 // Intended for a cron worker every minute. First writer wins due to AuctionWinner.auctionId being primary key.
