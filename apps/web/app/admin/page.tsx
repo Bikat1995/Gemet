@@ -162,22 +162,58 @@ export default function AdminDashboard() {
     );
   }
 
+  const handleResetData = async () => {
+    const secret = prompt('DANGER: This will wipe all users, auctions, bids, and winners. Enter secret key to confirm:');
+    if (!secret) return;
+    try {
+      const res = await fetch(`${api}/admin/reset-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret })
+      });
+      if (res.ok) {
+        alert('Database wiped successfully! Restarting...');
+        window.location.reload();
+      } else {
+        alert('Failed to reset data. Incorrect secret?');
+      }
+    } catch (err) {
+      alert(`Error: ${(err as Error).message}`);
+    }
+  };
+
   return (
-    <main className="min-h-screen bg-[#0A0D14] text-white p-8 relative">
-      <header className="mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 bg-cyan-500 rounded-lg grid place-items-center text-slate-900">
-            <Icon name="sliders" size={20} />
+    <main className="min-h-screen bg-[#0A0D14] text-white p-4 md:p-8 font-sans">
+      <div className="max-w-6xl mx-auto">
+        <header className="flex justify-between items-center mb-8 bg-[#141923] p-4 rounded-2xl border border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="bg-cyan-500/20 p-2 rounded-xl text-cyan-400">
+              <Icon name="sliders" size={24} />
+            </div>
+            <div>
+              <h1 className="text-xl font-extrabold text-white">Gemet Admin</h1>
+              <p className="text-xs text-slate-400">Management Dashboard</p>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold">Gemet System Dashboard</h1>
-        </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleResetData}
+              className="px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded-xl text-sm font-bold hover:bg-red-500/20 transition-colors"
+            >
+              Reset Database
+            </button>
+            <button onClick={() => setAuth(false)} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-colors">
+              Logout
+            </button>
+          </div>
+        </header>
+
         <button 
           onClick={() => setShowModal(true)}
-          className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 px-4 rounded-lg flex items-center gap-2"
+          className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 px-4 rounded-lg flex items-center gap-2 mb-8"
         >
           <Icon name="plus" size={16} /> Create Auction
         </button>
-      </header>
 
       {!stats ? <p>Loading data...</p> : (
         <>
