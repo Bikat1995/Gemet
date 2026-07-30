@@ -90,13 +90,17 @@ app.get('/winners/:auctionId/losers', async (req) => {
        auctionId, 
        amount: { not: null }, 
        paymentStatus: TransactionStatus.success,
-       ...(winner ? { id: { not: winner.winningBidId } } : {})
     },
     include: { user: true },
     orderBy: { createdAt: 'desc' }
   });
+  
+  const losers = winner 
+    ? bids.filter(b => !(b.userId === winner.userId && b.amount === winner.winningBidAmount))
+    : bids;
+
   return {
-    losers: bids.map(b => ({
+    losers: losers.map(b => ({
       id: b.id,
       ticketNumber: b.ticketNumber,
       phone: maskPhone(b.user.phoneNumber),
