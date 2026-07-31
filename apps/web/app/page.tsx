@@ -244,6 +244,8 @@ export default function Home() {
               </AnimatePresence>
             </motion.div>
             );
+          })
+        )}
       </section>
       <BottomNav />
     </main>
