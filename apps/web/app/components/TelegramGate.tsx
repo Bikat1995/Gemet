@@ -39,7 +39,7 @@ export default function TelegramGate({ children }: { children: React.ReactNode }
           Gemet is a Telegram Mini App. Please open it through the official Gemet bot on Telegram.
         </p>
         <a
-          href="https://t.me/GemetAuctionBot"
+          href="https://t.me/gemetlowestuniquebidauctionbot"
           style={{
             marginTop: '1.5rem',
             display: 'inline-block',
