@@ -69,11 +69,11 @@ export default function AdminDashboard() {
     if (lRes.ok) setLiveLeaders((await lRes.json()).leaders);
   };
 
-  // Initial fetch + auto-refresh every 15 seconds
+  // Initial fetch + auto-refresh every 5 seconds
   useEffect(() => {
     if (!auth) return;
     fetchAll();
-    const interval = setInterval(fetchAll, 15000);
+    const interval = setInterval(fetchAll, 5000);
     return () => clearInterval(interval);
   }, [auth]);
 
