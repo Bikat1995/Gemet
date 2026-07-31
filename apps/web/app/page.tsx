@@ -32,14 +32,23 @@ export default function Home() {
   const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Fetch auctions whenever category changes
+  // Fetch auctions whenever category changes, then auto-refresh every 20s
   useEffect(() => {
-    setAuctions(null);
     const catParam = cat === 'All' ? '' : `&category=${encodeURIComponent(cat)}`;
+    const fetchAuctions = () =>
+      fetch(`https://gemet-api.onrender.com/auctions?${catParam}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(x => { if (x?.auctions) setAuctions(x.auctions); })
+        .catch(() => {});
+
+    setAuctions(null); // show spinner only on first load / category change
     fetch(`https://gemet-api.onrender.com/auctions?${catParam}`)
       .then(r => r.ok ? r.json() : null)
       .then(x => setAuctions(x?.auctions ?? []))
       .catch(() => setAuctions([]));
+
+    const interval = setInterval(fetchAuctions, 20000);
+    return () => clearInterval(interval);
   }, [cat]);
 
   // Fetch unread notifications count

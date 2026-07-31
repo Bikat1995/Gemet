@@ -455,6 +455,47 @@ app.get('/admin/winners', async () => {
     date: w.declaredAt
   })) };
 });
+
+app.get('/admin/live-leaders', async () => {
+  // For every active auction, find the current lowest-unique bid
+  const activeAuctions = await prisma.auction.findMany({
+    where: { status: AuctionStatus.active },
+    orderBy: { endTime: 'asc' },
+  });
+
+  const leaders = await Promise.all(activeAuctions.map(async (auction) => {
+    // Get all placed bids grouped by amount
+    const bids = await prisma.bid.findMany({
+      where: { auctionId: auction.id, amount: { not: null }, paymentStatus: TransactionStatus.success },
+      include: { user: true },
+      orderBy: { amount: 'asc' },
+    });
+
+    // Count frequency of each amount
+    const freq: Record<number, number> = {};
+    for (const b of bids) { if (b.amount != null) freq[b.amount] = (freq[b.amount] ?? 0) + 1; }
+
+    // Find lowest unique amount
+    const unique = bids.filter(b => b.amount != null && freq[b.amount!] === 1);
+    const currentLeader = unique.length > 0 ? unique[0] : null;
+
+    return {
+      auctionId: auction.id,
+      auctionTitle: auction.title,
+      category: auction.category,
+      endTime: auction.endTime,
+      totalBids: bids.length,
+      currentLeader: currentLeader ? {
+        username: currentLeader.user.username || 'Anonymous',
+        phoneNumber: currentLeader.user.phoneNumber || 'Not provided',
+        amount: etb(currentLeader.amount!),
+        ticketNumber: currentLeader.ticketNumber,
+      } : null,
+    };
+  }));
+
+  return { leaders };
+});
 app.get('/admin/auctions', async () => {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const auctions = await prisma.auction.findMany({

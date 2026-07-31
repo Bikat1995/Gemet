@@ -10,8 +10,9 @@ type Auction = { id: string; title: string; entryFee: string; status: string };
 type Winner = { auctionId: string; title: string; description?: string; category?: string; username: string; phoneNumber: string; winningBidAmount: string; date: string };
 type PendingPayment = { id: string; username: string; phoneNumber: string | null; auctionTitle: string; entryFee: string; paymentMethod: string | null; txId: string | null; createdAt: string };
 type AdminBid = { id: string; auctionTitle: string; auctionCategory: string; username: string; phoneNumber: string; ticketNumber: string; amount: string; status: string; date: string };
+type LiveLeader = { auctionId: string; auctionTitle: string; category: string; endTime: string; totalBids: number; currentLeader: { username: string; phoneNumber: string; amount: string; ticketNumber: string } | null };
 
-type Tab = 'overview' | 'payments' | 'auctions' | 'users' | 'winners' | 'bids';
+type Tab = 'overview' | 'payments' | 'auctions' | 'users' | 'winners' | 'bids' | 'leaders';
 
 function StatCard({ label, value, color, icon }: { label: string; value: string | number; color: string; icon: string }) {
   return (
@@ -38,6 +39,7 @@ export default function AdminDashboard() {
   const [winners, setWinners] = useState<Winner[]>([]);
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [bids, setBids] = useState<AdminBid[]>([]);
+  const [liveLeaders, setLiveLeaders] = useState<LiveLeader[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -49,13 +51,14 @@ export default function AdminDashboard() {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchAll = async () => {
-    const [sRes, uRes, aRes, wRes, pRes, bRes] = await Promise.all([
+    const [sRes, uRes, aRes, wRes, pRes, bRes, lRes] = await Promise.all([
       fetch(`${api}/admin/stats`),
       fetch(`${api}/admin/users`),
       fetch(`${api}/admin/auctions`),
       fetch(`${api}/admin/winners`),
       fetch(`${api}/admin/payments/pending`),
       fetch(`${api}/admin/bids`),
+      fetch(`${api}/admin/live-leaders`),
     ]);
     if (sRes.ok) setStats(await sRes.json());
     if (uRes.ok) setUsers((await uRes.json()).users);
@@ -63,9 +66,16 @@ export default function AdminDashboard() {
     if (wRes.ok) setWinners((await wRes.json()).winners);
     if (pRes.ok) setPendingPayments((await pRes.json()).payments);
     if (bRes.ok) setBids((await bRes.json()).bids);
+    if (lRes.ok) setLiveLeaders((await lRes.json()).leaders);
   };
 
-  useEffect(() => { if (auth) fetchAll(); }, [auth]);
+  // Initial fetch + auto-refresh every 15 seconds
+  useEffect(() => {
+    if (!auth) return;
+    fetchAll();
+    const interval = setInterval(fetchAll, 15000);
+    return () => clearInterval(interval);
+  }, [auth]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -135,6 +145,7 @@ export default function AdminDashboard() {
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: 'overview', label: '📊 Overview' },
+    { id: 'leaders', label: '🥇 Live Leaders', badge: liveLeaders.filter(l => l.currentLeader).length || undefined },
     { id: 'payments', label: '⏳ Payments', badge: pendingPayments.length },
     { id: 'auctions', label: '🏷 Auctions' },
     { id: 'users', label: '👤 Users' },
@@ -442,6 +453,63 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* Live Leaders Tab */}
+        {tab === 'leaders' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg">🥇 Live Bid Leaders</h3>
+              <span className="text-xs text-slate-400">Auto-refreshes every 15s</span>
+            </div>
+            {liveLeaders.length === 0 ? (
+              <div className="bg-[#111827] rounded-2xl border border-white/5 p-10 text-center text-slate-400">No active auctions right now</div>
+            ) : (
+              liveLeaders.map(l => (
+                <div key={l.auctionId} className="bg-[#111827] rounded-2xl border border-white/5 p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{l.category}</p>
+                      <h4 className="text-base font-extrabold text-white">{l.auctionTitle}</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Ends: {new Date(l.endTime).toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-slate-500 uppercase tracking-widest">Total Bids</p>
+                      <p className="text-2xl font-black text-cyan-300">{l.totalBids}</p>
+                    </div>
+                  </div>
+                  <div className="h-px bg-white/5 mb-3" />
+                  {l.currentLeader ? (
+                    <div className="bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border border-amber-500/20 rounded-xl p-4">
+                      <p className="text-[10px] text-amber-400 font-black uppercase tracking-widest mb-2">🏆 Current Leader (Lowest Unique Bid)</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider">Username</p>
+                          <p className="text-sm font-bold text-white">{l.currentLeader.username}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider">Phone</p>
+                          <p className="text-sm font-bold text-cyan-300 font-mono">{l.currentLeader.phoneNumber}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider">Bid Amount</p>
+                          <p className="text-sm font-black text-amber-400">{l.currentLeader.amount} ETB</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider">Ticket</p>
+                          <p className="text-xs font-bold text-slate-300 font-mono">{l.currentLeader.ticketNumber}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl bg-white/3 border border-white/5 p-4 text-center text-xs text-slate-400">
+                      No unique bid yet — all bids are duplicated
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
         {/* Bids Tab */}
         {tab === 'bids' && (
           <div className="bg-[#111827] rounded-2xl border border-white/5 p-5">
@@ -452,37 +520,49 @@ export default function AdminDashboard() {
             {bids.length === 0 ? (
               <p className="text-center text-slate-400 py-10">No bids placed yet</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
-                    <tr>
-                      <th className="px-4 py-3 rounded-tl-lg">Auction</th>
-                      <th className="px-4 py-3">User</th>
-                      <th className="px-4 py-3">Phone</th>
-                      <th className="px-4 py-3">Ticket</th>
-                      <th className="px-4 py-3">Amount</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 rounded-tr-lg">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bids.map(b => (
-                      <tr key={b.id} className="border-b border-white/5">
-                        <td className="px-4 py-3 font-medium text-white max-w-[150px]"><div className="truncate">{b.auctionTitle}</div></td>
-                        <td className="px-4 py-3 text-white">{b.username}</td>
-                        <td className="px-4 py-3 text-cyan-300 font-mono">{b.phoneNumber}</td>
-                        <td className="px-4 py-3 text-slate-300 font-mono text-xs">{b.ticketNumber}</td>
-                        <td className="px-4 py-3 text-emerald-400 font-mono">{b.amount} ETB</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${b.status === 'unique' ? 'bg-emerald-500/10 text-emerald-400' : b.status === 'duplicated' ? 'bg-red-500/10 text-red-400' : 'bg-slate-500/10 text-slate-400'}`}>
-                            {b.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-400 text-xs">{new Date(b.date).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-6">
+                {/* Group bids by auction */}
+                {Object.entries(
+                  bids.reduce((acc, b) => { (acc[b.auctionTitle] = acc[b.auctionTitle] || []).push(b); return acc; }, {} as Record<string, AdminBid[]>)
+                ).map(([auctionTitle, auctionBids]) => (
+                  <div key={auctionTitle}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400`}>{auctionBids[0].auctionCategory}</span>
+                      <h4 className="text-sm font-extrabold text-white">{auctionTitle}</h4>
+                      <span className="text-[10px] text-slate-500">{auctionBids.length} bid{auctionBids.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-slate-400 uppercase bg-[#0E131D]">
+                          <tr>
+                            <th className="px-4 py-3 rounded-tl-lg">User</th>
+                            <th className="px-4 py-3">Phone</th>
+                            <th className="px-4 py-3">Ticket</th>
+                            <th className="px-4 py-3">Amount</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3 rounded-tr-lg">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auctionBids.map(b => (
+                            <tr key={b.id} className="border-b border-white/5">
+                              <td className="px-4 py-3 text-white">{b.username}</td>
+                              <td className="px-4 py-3 text-cyan-300 font-mono">{b.phoneNumber}</td>
+                              <td className="px-4 py-3 text-slate-300 font-mono text-xs">{b.ticketNumber}</td>
+                              <td className="px-4 py-3 text-emerald-400 font-mono">{b.amount} ETB</td>
+                              <td className="px-4 py-3">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${b.status === 'unique' ? 'bg-emerald-500/10 text-emerald-400' : b.status === 'duplicated' ? 'bg-red-500/10 text-red-400' : 'bg-slate-500/10 text-slate-400'}`}>
+                                  {b.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-slate-400 text-xs">{new Date(b.date).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

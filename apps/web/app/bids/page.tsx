@@ -38,12 +38,21 @@ export default function Bids() {
   const [lbLoading, setLbLoading] = useState(false);
 
   useEffect(() => {
+    const fetchAuctions = () =>
+      fetch(`${api}/auctions`)
+        .then(r => r.ok ? r.json() : null)
+        .then(x => { if (x?.auctions) setAuctions(x.auctions); })
+        .catch(() => {});
+
     setLoading(true);
     fetch(`${api}/auctions`)
       .then(r => r.ok ? r.json() : null)
       .then(x => x?.auctions && setAuctions(x.auctions))
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    const interval = setInterval(fetchAuctions, 20000);
+    return () => clearInterval(interval);
   }, []);
 
   const openLeaderboard = async (auction: Auction) => {
