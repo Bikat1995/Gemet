@@ -25,17 +25,7 @@ export default function TicketsPage() {
     search === '' || b.ticketNumber.toLowerCase().includes(search.toLowerCase())
   ) ?? [];
 
-  const badgeColor = (status: string) => {
-    if (status === 'unique') return 'text-emerald-300 bg-emerald-500/10';
-    if (status === 'duplicated') return 'text-red-300 bg-red-500/10';
-    return 'text-slate-300 bg-white/5';
-  };
 
-  const badgeLabel = (status: string) => {
-    if (status === 'unique') return lang === 'am' ? 'ልዩ ✓' : 'Unique ✓';
-    if (status === 'duplicated') return lang === 'am' ? 'ተደጋጋሚ' : 'Duplicated';
-    return status;
-  };
 
   return (
     <main className="app-shell mx-auto min-h-screen max-w-md px-4 pb-28 pt-5">
@@ -116,19 +106,14 @@ export default function TicketsPage() {
                 {lang === 'am' ? 'ቲኬት አልተገኘም' : 'No tickets found'}
               </p>
             ) : filteredBids.map((bid: any) => (
-              <div key={bid.ticketNumber} className="tile flex items-center justify-between p-4 rounded-xl border border-white/[.04]">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-cyan-500/10 text-cyan-400 shrink-0">
-                    <Icon name="ticket" size={16} />
-                  </div>
-                  <div>
-                    <div className="font-mono font-bold text-sm text-white tracking-wide">{bid.ticketNumber}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{new Date(bid.createdAt).toLocaleString()}</div>
-                  </div>
+              <div key={bid.ticketNumber} className="tile flex items-center gap-3 p-4 rounded-xl border border-white/[.04]">
+                <div className="grid h-9 w-9 place-items-center rounded-lg bg-cyan-500/10 text-cyan-400 shrink-0">
+                  <Icon name="ticket" size={16} />
                 </div>
-                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${badgeColor(bid.status)}`}>
-                  {badgeLabel(bid.status)}
-                </span>
+                <div>
+                  <div className="font-mono font-bold text-sm text-white tracking-wide">{bid.ticketNumber}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">{new Date(bid.createdAt).toLocaleString()}</div>
+                </div>
               </div>
             ))}
           </div>
