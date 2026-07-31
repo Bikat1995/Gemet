@@ -568,7 +568,7 @@ app.delete('/admin/auctions/:id', async (req, reply) => {
 // DANGER: wipe everything - protected by a secret key
 app.post('/admin/reset-all', async (req, reply) => {
   const { secret } = JSON.parse((req.body as Buffer).toString());
-  if (secret !== (process.env.ADMIN_RESET_SECRET ?? 'gemet-reset-2025')) {
+  if (secret !== (process.env.ADMIN_RESET_SECRET ?? 'Bike_Tile_Asse')) {
     return reply.code(403).send({ error: 'Forbidden' });
   }
   await prisma.notification.deleteMany();
