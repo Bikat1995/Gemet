@@ -127,7 +127,7 @@ export default function AdminDashboard() {
     if (!secret) return;
     const res = await fetch(`${api}/admin/reset-all`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret })
+      body: JSON.stringify({ secret: secret.trim() })
     });
     if (res.ok) { alert('Database wiped!'); window.location.reload(); }
     else alert('Failed. Wrong secret?');

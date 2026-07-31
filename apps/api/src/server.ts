@@ -571,7 +571,7 @@ app.post('/admin/reset-all', async (req, reply) => {
     const bodyStr = Buffer.isBuffer(req.body) ? (req.body as Buffer).toString() : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
     const { secret } = JSON.parse(bodyStr);
     const expected = process.env.ADMIN_RESET_SECRET ?? 'Bike_Tile_Asse';
-    if (!secret || secret !== expected) {
+    if (!secret || secret.trim() !== expected) {
       return reply.code(403).send({ error: 'Forbidden: wrong secret' });
     }
     await prisma.notification.deleteMany();
