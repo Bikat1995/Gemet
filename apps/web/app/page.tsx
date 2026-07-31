@@ -244,15 +244,7 @@ export default function Home() {
               </AnimatePresence>
             </motion.div>
             );
-          })
-        )}
       </section>
-      
-      {/* Copyright Footer */}
-      <div className="mt-8 mb-6 text-center text-[10px] text-slate-600 font-medium">
-        © {new Date().getFullYear()} Gemet. All rights reserved.
-      </div>
-
       <BottomNav />
     </main>
   );
