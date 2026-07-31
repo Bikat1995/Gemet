@@ -333,9 +333,14 @@ function AuctionInner() {
                 <div className="mono text-lg font-bold text-white">{ticket.ticketNumber}</div>
               </div>
             </div>
-            <Link href="/tickets" className="block w-full text-center py-3 rounded-xl bg-[#141923] text-cyan-300 font-semibold border border-white/5">
-              View All Tickets
-            </Link>
+            <div className="flex flex-col gap-3">
+              <button onClick={() => { setTicket(null); setNotice({ kind: 'idle', text: '' }); }} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 font-bold shadow-[0_0_22px_rgba(6,182,212,.25)] active:scale-95 transition-all">
+                Place Another Bid
+              </button>
+              <Link href="/bids" className="block w-full text-center py-3 rounded-xl bg-[#141923] text-cyan-300 font-semibold border border-white/5 active:scale-95 transition-all">
+                View My Bids
+              </Link>
+            </div>
           </motion.div>
         ) : hasPaid ? (
           // --- STATE: PAID, NEEDS BID ---

@@ -134,7 +134,7 @@ app.post('/notifications/read', async req => {
 app.get('/auctions/:id/ticket', async (req) => {
   const s = await session(req);
   const auctionId = (req.params as any).id;
-  const ticket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
+  const ticket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId, amount: null }, orderBy: { createdAt: 'desc' } });
   
   return { ticket };
 });
@@ -148,7 +148,7 @@ app.post('/auctions/:id/manual-pay/submit', async (req, reply) => {
     const auction = await prisma.auction.findUnique({ where: { id: auctionId } });
     if (!auction || auction.status !== AuctionStatus.active) return reply.code(404).send({ error: 'Auction not found or not active' });
 
-    const existingTicket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId }, orderBy: { createdAt: 'desc' } });
+    const existingTicket = await prisma.bid.findFirst({ where: { userId: s.userId, auctionId, amount: null }, orderBy: { createdAt: 'desc' } });
     
     // Check if they already have a ticket that is paid
     if (existingTicket?.paymentStatus === TransactionStatus.success && existingTicket.amount == null) {
