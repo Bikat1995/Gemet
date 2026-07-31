@@ -78,6 +78,8 @@ model Bid {
   user User @relation(fields:[userId],references:[id])
   
   @@index([auctionId,amount])
+  @@index([userId, auctionId])
+  @@index([paymentStatus])
 }
 model AuctionWinner {
   auctionId String @id @map("auction_id")
