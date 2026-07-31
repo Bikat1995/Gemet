@@ -567,16 +567,22 @@ app.delete('/admin/auctions/:id', async (req, reply) => {
 
 // DANGER: wipe everything - protected by a secret key
 app.post('/admin/reset-all', async (req, reply) => {
-  const { secret } = JSON.parse((req.body as Buffer).toString());
-  if (secret !== (process.env.ADMIN_RESET_SECRET ?? 'Bike_Tile_Asse')) {
-    return reply.code(403).send({ error: 'Forbidden' });
+  try {
+    const bodyStr = Buffer.isBuffer(req.body) ? (req.body as Buffer).toString() : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
+    const { secret } = JSON.parse(bodyStr);
+    const expected = process.env.ADMIN_RESET_SECRET ?? 'Bike_Tile_Asse';
+    if (!secret || secret !== expected) {
+      return reply.code(403).send({ error: 'Forbidden: wrong secret' });
+    }
+    await prisma.notification.deleteMany();
+    await prisma.auctionWinner.deleteMany();
+    await prisma.bid.deleteMany();
+    await prisma.auction.deleteMany();
+    await prisma.user.deleteMany();
+    return { success: true, message: 'All data cleared' };
+  } catch (e: any) {
+    return reply.code(400).send({ error: 'Bad request', details: e.message });
   }
-  await prisma.notification.deleteMany();
-  await prisma.auctionWinner.deleteMany();
-  await prisma.bid.deleteMany();
-  await prisma.auction.deleteMany();
-  await prisma.user.deleteMany();
-  return { success: true, message: 'All data cleared' };
 });
 
 // Intended for a cron worker every minute. First writer wins due to AuctionWinner.auctionId being primary key.
