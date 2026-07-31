@@ -1,0 +1,53 @@
+config:
+  target: "https://gemet-api.onrender.com"
+  phases:
+    # Phase 1: Warm up — 10 users/sec for 30 seconds (300 total)
+    - name: "Warm Up"
+      duration: 30
+      arrivalRate: 10
+    # Phase 2: Ramp up — grow from 10 to 100 users/sec over 60 seconds
+    - name: "Ramp Up"
+      duration: 60
+      arrivalRate: 10
+      rampTo: 100
+    # Phase 3: Peak load — 200 users/sec for 60 seconds (12,000 total requests)
+    - name: "Peak Load"
+      duration: 60
+      arrivalRate: 200
+    # Phase 4: Spike — sudden burst of 500 users/sec for 15 seconds
+    - name: "Spike"
+      duration: 15
+      arrivalRate: 500
+
+scenarios:
+  # Scenario 1: Users browsing auctions (most common action - 60% of traffic)
+  - name: "Browse Auctions"
+    weight: 60
+    flow:
+      - get:
+          url: "/auctions"
+          expect:
+            - statusCode: 200
+
+  # Scenario 2: Browse by category (30% of traffic)
+  - name: "Browse by Category"
+    weight: 30
+    flow:
+      - get:
+          url: "/auctions?category=Electronics"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - get:
+          url: "/auctions?category=Vehicles"
+          expect:
+            - statusCode: 200
+
+  # Scenario 3: Check winners page (10% of traffic)
+  - name: "Check Winners"
+    weight: 10
+    flow:
+      - get:
+          url: "/winners"
+          expect:
+            - statusCode: 200

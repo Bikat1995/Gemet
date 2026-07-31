@@ -34,22 +34,24 @@ app.get('/health', async () => ({ ok: true, service: 'gemet-api' }));
 app.get('/auctions', async (req) => {
   const { category: cat, q } = req.query as any;
   const cacheKey = `auctions:${cat || 'all'}:${q || 'none'}`;
-  
-  const cached = await redis.get(cacheKey);
-  if (cached) return JSON.parse(cached);
+
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+  } catch (_) { /* Redis down — fall through to DB */ }
 
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const where: any = { 
+  const where: any = {
     status: AuctionStatus.active,
     endTime: { gt: twentyFourHoursAgo }
   };
   if (cat && cat !== 'All') where.category = cat;
   if (q) where.title = { contains: q, mode: 'insensitive' };
-  
-  const auctions = (await prisma.auction.findMany({ where, orderBy:{ endTime:'asc' } })).map(presentAuction);
+
+  const auctions = (await prisma.auction.findMany({ where, orderBy: { endTime: 'asc' } })).map(presentAuction);
   const result = { auctions };
-  
-  await redis.set(cacheKey, JSON.stringify(result), 'EX', 3);
+
+  try { await redis.set(cacheKey, JSON.stringify(result), 'EX', 3); } catch (_) {}
   return result;
 });
 // Removed /wallet and /wallet/history
