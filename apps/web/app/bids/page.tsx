@@ -51,7 +51,7 @@ export default function Bids() {
       .catch(() => {})
       .finally(() => setLoading(false));
 
-    const interval = setInterval(fetchAuctions, 5000);
+    const interval = setInterval(fetchAuctions, 30000);
     return () => clearInterval(interval);
   }, []);
 

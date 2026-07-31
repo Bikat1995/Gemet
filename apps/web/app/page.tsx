@@ -47,7 +47,7 @@ export default function Home() {
       .then(x => setAuctions(x?.auctions ?? []))
       .catch(() => setAuctions([]));
 
-    const interval = setInterval(fetchAuctions, 5000);
+    const interval = setInterval(fetchAuctions, 30000);
     return () => clearInterval(interval);
   }, [cat]);
 
