@@ -110,6 +110,12 @@ export default function Profile() {
           </span>
           <span className="flex-1 text-[13px] font-semibold">Privacy Policy</span>
         </Link>
+        <Link href="/terms" className="tile flex w-full items-center gap-3 rounded-xl p-3 text-left active:scale-[0.98] transition-transform">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#101722] text-cyan-300">
+            <Icon name="help" size={17} />
+          </span>
+          <span className="flex-1 text-[13px] font-semibold">Terms of Use</span>
+        </Link>
       </section>
 
       <BottomNav />
