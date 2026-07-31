@@ -6,7 +6,7 @@ export const prisma = new PrismaClient();
 export const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
 export const redisSub = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
 export const cents = (value: string | number) => Math.round(Number(value) * 100);
-export const etb = (value: number) => (value / 100).toFixed(2);
+export const etb = (value: number) => String(Math.round(value / 100));
 
 /** Telegram's official data-check-string HMAC flow. Never trust client-provided user data. */
 export function verifyTelegramInitData(initData: string, botToken = process.env.BOT_TOKEN!) {
